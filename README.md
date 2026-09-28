@@ -5,9 +5,12 @@
 # Docstack
 
 **An enterprise-grade documentation site template**<br/>
-Ship beautiful, lightning-fast product docs in minutes — versioned MDX content,<br/>
-full-text search, API reference layouts, dual-theme code highlighting,<br/>
-and SEO baked in. No external services, no backend — just Markdown.
+
+</div>
+
+Ship beautiful, lightning-fast product docs in minutes - versioned MDX content, full-text search, API reference layouts, dual-theme code highlighting, and SEO baked in. No external services, no backend - just Markdown.
+
+<div align="center">
 
 Next.js 15 App Router · React 19 · MDX · TypeScript · Shiki · next-themes
 
@@ -18,7 +21,7 @@ Next.js 15 App Router · React 19 · MDX · TypeScript · Shiki · next-themes
 
 </div>
 
-> Meridian Platform is the included sample content. Swap in your own MDX and rebrand in minutes — see [Customization](#customization).
+> Meridian Platform is the included sample content. Swap in your own MDX and rebrand in minutes - see [Customization](#customization).
 
 <div align="center">
 
@@ -26,15 +29,15 @@ Next.js 15 App Router · React 19 · MDX · TypeScript · Shiki · next-themes
 
 </div>
 
-- **Versioned documentation** — multiple doc versions side by side (`/docs/...` for current, `/docs/v1/...` for legacy)
-- **MDX content model** — pages are plain `.mdx` files with YAML frontmatter; drafts, deprecation banners, badges, and reading-time built in
-- **Rich component library** — callouts, cards, tabs, code blocks with Shiki dual-theme highlighting, parameter tables, API endpoints, file trees, accordions, and more
-- **Full-text search** — client-side search over a generated index (`Ctrl+K` / `Cmd+K`), zero external services
-- **Static by default** — every doc page is prerendered at build time; pages serve in single-digit milliseconds
-- **SEO complete** — sitemap, robots.txt, RSS feed (`/feed.xml`), OpenGraph images, JSON-LD, canonical URLs
-- **Raw markdown endpoints** — `/raw/<path>` serves the source MDX for any page (LLM/agent friendly)
-- **Docs UX** — sidebar with persisted collapse state, breadcrumbs, auto-generated TOC with scrollspy, prev/next pagination, keyboard shortcuts, mobile nav
-- **Dark mode** — `next-themes` with dual-theme code highlighting
+- **Versioned documentation** - multiple doc versions side by side (`/docs/...` for current, `/docs/v1/...` for legacy)
+- **MDX content model** - pages are plain `.mdx` files with YAML frontmatter; drafts, deprecation banners, badges, and reading-time built in
+- **Rich component library** - callouts, cards, tabs, code blocks with Shiki dual-theme highlighting, parameter tables, API endpoints, file trees, accordions, and more
+- **Full-text search** - client-side search over a generated index (`Ctrl+K` / `Cmd+K`), zero external services
+- **Static by default** - every doc page is prerendered at build time; pages serve in single-digit milliseconds
+- **SEO complete** - sitemap, robots.txt, RSS feed (`/feed.xml`), OpenGraph images, JSON-LD, canonical URLs
+- **Raw markdown endpoints** - `/raw/<path>` serves the source MDX for any page (LLM/agent friendly)
+- **Docs UX** - sidebar with persisted collapse state, breadcrumbs, auto-generated TOC with scrollspy, prev/next pagination, keyboard shortcuts, mobile nav
+- **Dark mode** - `next-themes` with dual-theme code highlighting
 
 <div align="center">
 
@@ -74,8 +77,8 @@ npm run typecheck  # tsc --noEmit
    description: One-line summary for SEO and search.
    updatedAt: 2026-09-28
    badge: beta            # optional
-   deprecated: true       # optional — renders a warning banner
-   draft: true            # optional — excluded from builds
+   deprecated: true       # optional - renders a warning banner
+   draft: true            # optional - excluded from builds
    ---
 
    ## Content here
@@ -119,7 +122,7 @@ Create `content/docs/v3/`, add `{ id: "v3", label: "v3" }` to `VERSIONS` in `lib
 
 </div>
 
-Any Node.js host works — the app uses dynamic route handlers (`feed.xml`, `status.json`), so it is **not** a static-export site.
+Any Node.js host works - the app uses dynamic route handlers (`feed.xml`, `status.json`), so it is **not** a static-export site.
 
 - **Node**: `npm run build && npm start`
 - **Docker**: `docker build -t docstack . && docker run -p 3000:3000 docstack` (standalone output is preconfigured)
