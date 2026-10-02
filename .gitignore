@@ -1,0 +1,18 @@
+# dependencies
+node_modules
+
+# builds
+.next
+out
+*.tsbuildinfo
+next-env.d.ts
+
+# env
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.log
+.vercel
