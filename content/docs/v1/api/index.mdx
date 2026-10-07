@@ -1,0 +1,67 @@
+---
+title: API reference (v1)
+description: v1 API conventions - base URL, offset pagination, error format, and the resource list.
+updatedAt: 2026-04-01
+---
+
+<Callout type="warning">
+  v1 is in maintenance mode (EOL 2027-03-31). New integrations should target [v2](/docs/api).
+</Callout>
+
+## Base URL
+
+```text
+https://api.meridian.dev/v1
+```
+
+## Conventions
+
+- JSON request/response bodies, `Authorization: Bearer mrnd_…` auth.
+- Environment via `?env=test|live` query param (removed in v2).
+- IDs are `prj_`, `wh_`, `evt_` prefixed - same format as v2 but **different namespaces**.
+
+## Pagination (offset)
+
+v1 lists use offset pagination:
+
+<ParamTable
+  label="Query parameters"
+  params={[
+    { name: "page", type: "integer", description: "1-based page number.", default: "1" },
+    { name: "per_page", type: "integer", description: "Items per page, 1–100.", default: "25" },
+  ]}
+/>
+
+```json title="v1 list response"
+{
+  "data": [ /* … */ ],
+  "page": 1,
+  "per_page": 25,
+  "total": 137
+}
+```
+
+<Callout type="note">
+  `total` and offset pagination were removed in v2 - use `cursor`/`has_more`/`next_cursor` there.
+</Callout>
+
+## Error shape
+
+```json title="v1 error"
+{
+  "error": "resource not found"
+}
+```
+
+A flat string - no `code`, no `request_id`. v2 introduces the structured `error` object; handle both during migration.
+
+## Resources
+
+<CardGrid>
+  <Card title="Projects (v1)" href="/docs/v1/api/projects" icon="box">
+    Offset-paginated project CRUD.
+  </Card>
+  <Card title="Errors (v1)" href="/docs/v1/api/errors" icon="book">
+    The flat error-string format.
+  </Card>
+</CardGrid>

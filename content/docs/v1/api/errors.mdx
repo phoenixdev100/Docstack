@@ -1,0 +1,47 @@
+---
+title: Errors (v1)
+description: v1 error format - flat error strings and the HTTP status meanings.
+updatedAt: 2026-04-01
+---
+
+<Callout type="warning">
+  v1's flat error format is superseded by the [v2 structured error object](/docs/api/errors). During migration, handle both shapes.
+</Callout>
+
+## Error shape
+
+v1 errors are a single string field:
+
+```json title="v1 error"
+{
+  "error": "invalid api key"
+}
+```
+
+No `code`, `param`, `request_id`, or `type` - branching on errors in v1 means string-matching, which is brittle. This is one of the main reasons to migrate.
+
+## Status meanings
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Malformed request - message describes the problem |
+| `401` | Missing or invalid API key |
+| `403` | Not permitted |
+| `404` | Resource not found |
+| `429` | Rate limited - retry after a delay (no `Retry-After` in v1) |
+| `500` | Platform error - retry with backoff |
+
+## Handling both formats during migration
+
+```javascript title="Normalizing v1 and v2 errors"
+function errorCode(status, body) {
+  if (body?.error && typeof body.error === "object") {
+    return body.error.code;      // v2
+  }
+  return `v1_http_${status}`;    // v1 - map status only
+}
+```
+
+<Callout type="tip">
+  Every v2 error carries `request_id`. If you're migrating and logging both formats, capture the `Meridian-Request-Id` response header - it exists in v1 responses too, even though the error body doesn't include it.
+</Callout>
