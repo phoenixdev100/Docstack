@@ -1,0 +1,89 @@
+---
+title: Projects (v1)
+description: v1 projects resource - list, create, get, update, delete with offset pagination.
+updatedAt: 2026-04-01
+---
+
+<Callout type="warning">
+  v1 endpoint - see [v2 Projects](/docs/api/projects) for cursor pagination and current field shapes.
+</Callout>
+
+## The project object (v1)
+
+```json title="project (v1)"
+{
+  "id": "prj_9kLm2xVb7nQe",
+  "name": "billing-sync",
+  "region": "us-east",
+  "status": "active",
+  "created_at": "2026-08-14T09:31:07Z"
+}
+```
+
+Differences from v2: no `object` field, no `environment`, no `metadata`, no `updated_at`.
+
+## List projects
+
+<ApiEndpoint method="GET" path="/projects" />
+
+<ParamTable
+  label="Query parameters"
+  params={[
+    { name: "page", type: "integer", description: "1-based page.", default: "1" },
+    { name: "per_page", type: "integer", description: "Items per page, max 100.", default: "25" },
+    { name: "env", type: "string", description: "test or live.", default: "live" },
+  ]}
+/>
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v1/projects?page=1&per_page=25&env=test" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```json title="Response"
+{
+  "data": [
+    {
+      "id": "prj_9kLm2xVb7nQe",
+      "name": "billing-sync",
+      "region": "us-east",
+      "status": "active",
+      "created_at": "2026-08-14T09:31:07Z"
+    }
+  ],
+  "page": 1,
+  "per_page": 25,
+  "total": 3
+}
+```
+
+## Create a project
+
+<ApiEndpoint method="POST" path="/projects" />
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", required: true, description: "Display name." },
+    { name: "region", type: "string", required: true, description: "us-east, eu-west, or ap-south." },
+  ]}
+/>
+
+```bash title="Terminal"
+curl -X POST https://api.meridian.dev/v1/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "billing-sync", "region": "us-east"}'
+```
+
+## Other operations
+
+| Method | Path |
+| --- | --- |
+| `GET` | `/projects/:id` |
+| `PUT` | `/projects/:id` (full replace - v2 uses `PATCH`) |
+| `DELETE` | `/projects/:id` |
+
+<Callout type="important">
+  v1 `PUT` replaces the entire resource - omitted fields reset to defaults. v2 uses `PATCH` semantics instead; audit any v1 `PUT` callers during migration.
+</Callout>

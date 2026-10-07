@@ -1,0 +1,49 @@
+---
+title: Authentication (v1)
+description: v1 API key authentication - Bearer tokens in the Authorization header.
+updatedAt: 2026-04-01
+---
+
+<Callout type="warning">
+  This is the v1 auth model. For restricted keys, scopes, and environment isolation see the [v2 authentication docs](/docs/api/authentication).
+</Callout>
+
+All v1 requests authenticate with a Bearer key:
+
+```http title="Request header"
+Authorization: Bearer mrnd_4f8e2c1a9b7d3e5f6a0c
+```
+
+## Key model
+
+v1 keys are simpler than v2:
+
+- Single `mrnd_` prefix - no test/live split in the key itself.
+- Environment is selected by a `?env=test|live` query parameter (default `live`).
+- No scopes - every key has full workspace access.
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v1/projects?env=test" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+<Callout type="important">
+  The `?env=` parameter was removed in v2 - there, the key itself determines the environment. Code that parses `env=` responses needs updating during migration.
+</Callout>
+
+## Errors
+
+v1 returns errors as a plain string field:
+
+```json title="v1 error shape"
+{
+  "error": "invalid api key"
+}
+```
+
+| Status | Meaning |
+| --- | --- |
+| `401` | Missing or invalid key |
+| `403` | Key lacks permission for this resource |
+
+In v2 these become structured `authentication` and `permission` error objects with stable `code` fields.

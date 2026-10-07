@@ -1,0 +1,37 @@
+---
+title: Introduction (v1)
+description: Meridian API v1 documentation. v1 reaches end-of-life on 2027-03-31 - migrate to v2 when possible.
+updatedAt: 2026-04-01
+---
+
+<Callout type="warning" title="You're viewing the v1 docs">
+  API v1 is in maintenance mode and reaches end-of-life on **2027-03-31**. New features ship only in v2. Use the version switcher in the sidebar or go to the [v2 documentation](/docs/getting-started).
+</Callout>
+
+Meridian v1 is the original REST API: projects, API keys, and webhook delivery over HTTPS + JSON.
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v1/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Key differences from v2
+
+| Area | v1 | v2 |
+| --- | --- | --- |
+| Pagination | Offset (`page`, `per_page`) | Cursor (`cursor`, `limit`) |
+| List response | `total` count field | `has_more`, `next_cursor` |
+| Webhook signature | `X-Meridian-Signature` (v1 HMAC) | `Meridian-Signature` (timestamped v1 scheme) |
+| Error shape | `{ "error": "message" }` string | Structured `error` object with `code` |
+| Environments | Not isolated | Fully isolated test/live |
+
+## Migrating to v2
+
+1. Read the [v2 API overview](/docs/api) - the surface is similar, conventions differ.
+2. Update pagination: replace `page`/`per_page` loops with `cursor`/`limit` (SDKs auto-paginate in v2).
+3. Update webhook verification to the timestamped `Meridian-Signature` scheme - see [v2 Webhooks](/docs/guides/webhooks).
+4. Update error handling: branch on `error.code`, not the message string.
+
+<Callout type="note">
+  v1 and v2 resources are separate namespaces - a project created through v1 does not appear in v2 list responses.
+</Callout>
