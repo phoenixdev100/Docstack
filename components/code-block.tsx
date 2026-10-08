@@ -31,6 +31,8 @@ export async function CodeBlock({
   highlight,
   lineNumbers,
 }: CodeBlockProps) {
+  if (!code) return null;
+
   const parsed = parseMeta(meta);
   const resolvedTitle = title ?? parsed.title;
   const resolvedLang = normalizeLang(lang);

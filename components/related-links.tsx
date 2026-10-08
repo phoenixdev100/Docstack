@@ -9,10 +9,12 @@ import { FileText } from "lucide-react";
  * ]} />
  */
 export function RelatedLinks({
-  links,
+  links = [],
 }: {
-  links: { title: string; href: string }[];
+  links?: { title: string; href: string }[];
 }) {
+  if (!links || links.length === 0) return null;
+
   return (
     <div className="related-links">
       {links.map((l) => (
