@@ -26,14 +26,16 @@ export interface FlowStep {
  * No client JS; meant to replace ASCII-art diagrams in docs.
  */
 export function Flow({
-  steps,
+  steps = [],
   direction = "vertical",
   caption,
 }: {
-  steps: FlowStep[];
+  steps?: FlowStep[];
   direction?: "vertical" | "horizontal";
   caption?: ReactNode;
 }) {
+  if (!steps || steps.length === 0) return null;
+
   if (direction === "horizontal") {
     return (
       <figure className="flow">

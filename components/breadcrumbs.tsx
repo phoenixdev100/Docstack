@@ -2,10 +2,12 @@ import Link from "next/link";
 import { Fragment } from "react";
 
 export function Breadcrumbs({
-  items,
+  items = [],
 }: {
-  items: { title: string; href?: string }[];
+  items?: { title: string; href?: string }[];
 }) {
+  if (!items || items.length === 0) return null;
+
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       {items.map((item, i) => {

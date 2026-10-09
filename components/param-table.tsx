@@ -12,12 +12,14 @@ export interface Param {
 
 /** Scannable parameter table for API docs. */
 export function ParamTable({
-  params,
+  params = [],
   label,
 }: {
-  params: Param[];
+  params?: Param[];
   label?: string;
 }) {
+  if (!params || params.length === 0) return null;
+
   return (
     <div>
       {label && <span className="section-label">{label}</span>}

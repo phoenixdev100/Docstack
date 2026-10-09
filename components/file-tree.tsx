@@ -40,7 +40,9 @@ function TreeItem({ item }: { item: FileTreeItem }) {
  *   { name: "app", children: [{ name: "layout.tsx" }, { name: "page.tsx" }] },
  * ]} />
  */
-export function FileTree({ items }: { items: FileTreeItem[] }) {
+export function FileTree({ items = [] }: { items?: FileTreeItem[] }) {
+  if (!items || items.length === 0) return null;
+
   return (
     <div className="filetree">
       <ul className="filetree-root">

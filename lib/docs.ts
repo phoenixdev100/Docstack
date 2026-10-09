@@ -64,7 +64,7 @@ export function extractHeadings(source: string): TocHeading[] {
 function docPath(version: string, slug: string[]): string | null {
   const base = path.join(CONTENT_ROOT, version, ...slug);
   for (const candidate of [`${base}.mdx`, path.join(base, "index.mdx")]) {
-    if (fs.existsSync(candidate)) return candidate;
+    if (fs.existsSync(/*turbopackIgnore: true*/ candidate)) return candidate;
   }
   return null;
 }
@@ -72,7 +72,7 @@ function docPath(version: string, slug: string[]): string | null {
 export function getDoc(version: string, slug: string[]): Doc | null {
   const filePath = docPath(version, slug);
   if (!filePath) return null;
-  const raw = fs.readFileSync(filePath, "utf8");
+  const raw = fs.readFileSync(/*turbopackIgnore: true*/ filePath, "utf8");
   const { data, content } = matter(raw);
   const fm = data as DocFrontmatter;
   if (fm.draft) return null;

@@ -120,11 +120,11 @@ function CopyMarkdown({ rawHref }: { rawHref: string }) {
 
 /** Scroll-spy table of contents for the right rail. */
 export function TableOfContents({
-  headings,
+  headings = [],
   editHref,
   rawHref,
 }: {
-  headings: TocHeading[];
+  headings?: TocHeading[];
   editHref?: string;
   rawHref?: string;
 }) {

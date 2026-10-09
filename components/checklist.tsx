@@ -14,11 +14,13 @@ import { Check } from "lucide-react";
  */
 export function Checklist({
   id,
-  items,
+  items = [],
 }: {
   id: string;
-  items: string[];
+  items?: string[];
 }) {
+  if (!items || items.length === 0) return null;
+
   const storageKey = `meridian-checklist:${id}`;
   const [checked, setChecked] = useState<boolean[]>(items.map(() => false));
 
