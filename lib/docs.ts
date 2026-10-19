@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import matter from "gray-matter";
+import { frontmatter } from "./frontmatter";
 import GithubSlugger from "github-slugger";
 import { DEFAULT_VERSION, VERSIONS, isVersionId } from "./navigation";
 
@@ -73,8 +73,8 @@ export function getDoc(version: string, slug: string[]): Doc | null {
   const filePath = docPath(version, slug);
   if (!filePath) return null;
   const raw = fs.readFileSync(/*turbopackIgnore: true*/ filePath, "utf8");
-  const { data, content } = matter(raw);
-  const fm = data as DocFrontmatter;
+  const { data, content } = frontmatter(raw);
+  const fm = data as unknown as DocFrontmatter;
   if (fm.draft) return null;
   const words = content.split(/\s+/).filter(Boolean).length;
   return {
