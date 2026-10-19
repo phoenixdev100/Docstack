@@ -1,0 +1,79 @@
+---
+title: Projects
+description: Projects are the unit of work in Meridian - configuration, quotas, regions, and lifecycle.
+updatedAt: 2026-08-20
+---
+
+A project is the container for one integration workload. Everything you configure - webhook endpoints, sync jobs, connections - lives inside a project, and every API call resolves to one.
+
+## Anatomy of a project
+
+```json title="project object"
+{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "created_at": "2026-08-14T09:31:07Z",
+  "updated_at": "2026-09-02T14:12:44Z"
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `id` | Immutable `prj_` identifier used in API paths |
+| `name` | Display name, unique within the workspace |
+| `region` | `us-east`, `eu-west`, or `ap-south` - set at creation, immutable |
+| `status` | `active`, `suspended`, or `archived` |
+
+## Choosing a region
+
+Region determines where project data is stored and processed. Pick the region closest to your infrastructure or required by data-residency policy. Because region is immutable, changing it means creating a new project and migrating configuration.
+
+<Callout type="warning">
+  Projects cannot move between regions after creation. Webhook endpoints and event history do not transfer.
+</Callout>
+
+## Quotas
+
+Quotas apply per project per environment:
+
+| Resource | test | live |
+| --- | --- | --- |
+| API requests | 600/min | 5,000/min |
+| Webhook endpoints | 10 | 100 |
+| Event retention | 7 days | 90 days |
+| Concurrent syncs | 2 | 25 |
+
+Higher live limits are available on paid plans - see [Production setup](/docs/guides/production-setup).
+
+## Naming conventions
+
+- Use lowercase, hyphenated names that describe the workload: `billing-sync`, `slack-alerts`, `warehouse-export`.
+- Names must be unique within a workspace - reused names make log correlation and support harder.
+- The name appears in event payloads and delivery logs, so avoid embedding secrets or environment names.
+
+## Lifecycle
+
+Projects move through three states:
+
+1. **active** - normal operation.
+2. **suspended** - reads work, writes and deliveries pause. Triggered by quota abuse or manually from the dashboard.
+3. **archived** - soft-deleted. Configuration is retained for 30 days, then purged. Archived projects serve `404` on all endpoints.
+
+```bash title="Archive a project"
+curl -X DELETE https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+Archiving is reversible for 30 days via `POST /projects/:id/restore`. After that, deletion is permanent and IDs are never reused.
+
+<Callout type="tip">
+  Create a throwaway project in `test` for experiments instead of reusing a shared sandbox - project creation is free and instant.
+</Callout>
+
+## API reference
+
+The projects resource exposes the standard five operations: [list](/docs/api/projects/list), [create](/docs/api/projects/create), [get](/docs/api/projects/get), [update](/docs/api/projects/update), and [delete](/docs/api/projects/delete).

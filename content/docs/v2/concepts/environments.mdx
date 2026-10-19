@@ -1,0 +1,94 @@
+---
+title: Environments
+description: Every project has isolated test and live environments - keys, webhooks, events, and rate limits never cross over.
+updatedAt: 2026-08-20
+---
+
+Every project has two environments - `test` and `live` - that are fully isolated from each other. They exist so you can develop, integrate, and load-test without touching production traffic.
+
+## What isolation means
+
+The two environments share a project's *name and region* but nothing else:
+
+| Resource | Shared | Isolated per environment |
+| --- | --- | --- |
+| API keys | - | yes - `mrnd_test_` vs `mrnd_live_` |
+| Webhook endpoints | - | yes - registered separately |
+| Events and logs | - | yes - separate retention and history |
+| Rate limits | - | yes - test traffic can't throttle live |
+| Project name / region | yes | - |
+| Member permissions | - | yes - roles can differ per environment |
+
+A `test` key literally cannot resolve `live` resources - they don't exist in its view of the world.
+
+## The promotion workflow
+
+The intended lifecycle for a change:
+
+1. **Develop in `test`** - build against `mrnd_test_` keys with no risk to production.
+2. **Verify** - webhook deliveries, event payloads, and sync behavior all work identically in `test`.
+3. **Promote configuration** - recreate webhook endpoints and settings in `live` (manually, or via the Environments API / Terraform).
+4. **Switch credentials** - deploy `mrnd_live_` keys and flip your config flag.
+
+```bash title="Same call, different environment"
+# test
+curl https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_TEST_KEY"
+
+# live - identical path, different key
+curl https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_LIVE_KEY"
+```
+
+The environment is selected entirely by the API key - there is no `?env=` parameter and no way to mix them in one request.
+
+## Test environment rules
+
+- Test data may be pruned after 90 days of inactivity.
+- Outbound calls from test webhooks are allowed to any URL, including `localhost` tunnels like `localhost:3000` or ngrok.
+- Test event payloads are structurally identical to live ones - only the `environment` field and volume differ.
+
+<Callout type="tip">
+  Use a tunneling tool (ngrok, Tailscale Funnel) pointed at your dev machine to receive real `test` webhook deliveries while developing.
+</Callout>
+
+## Managing environments via API
+
+Environments themselves are resources - useful for infrastructure-as-code setups:
+
+```bash title="List a project's environments"
+curl https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe/environments \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```json title="Response"
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "env_2hF8kLm4xQ",
+      "object": "environment",
+      "name": "test",
+      "status": "active",
+      "event_retention_days": 7
+    },
+    {
+      "id": "env_7dR1mPx9vW",
+      "object": "environment",
+      "name": "live",
+      "status": "active",
+      "event_retention_days": 90
+    }
+  ]
+}
+```
+
+## Common mistakes
+
+- **Using a test key in production config** - calls succeed but hit an empty environment; resources "missing" in production are usually just in the other environment.
+- **Registering production webhooks in test** - deliveries silently go nowhere. Check the environment badge in the dashboard before creating endpoints.
+- **Hardcoding keys per environment** - inject the key via config so promoting to live is a one-line change.
+
+<Callout type="note" title="403 environment_mismatch">
+  If a request returns `environment_mismatch`, you're using a test-scoped key against a resource that only exists in `live` (or vice versa).
+</Callout>
