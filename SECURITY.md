@@ -15,4 +15,4 @@ Do **not** open a public issue. Use GitHub's [private vulnerability reporting](.
 
 ## Accepted risks
 
-This project uses `gray-matter` to parse MDX frontmatter from trusted content files. A transitive dependency (`sprintf-js`) has a moderate-severity DoS vulnerability (GHSA-hp3w-g68c-fv3c) that only affects untrusted YAML input. Since content is controlled by docs authors (not arbitrary users), this risk is accepted. Future versions of `gray-matter` may resolve this via dependency updates.
+None currently. Frontmatter is parsed by a minimal internal parser (`lib/frontmatter.ts`) using the `yaml` package — chosen over `gray-matter` specifically to avoid its vulnerable `js-yaml@3` → `sprintf-js` dependency chain.
