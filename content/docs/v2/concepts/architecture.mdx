@@ -1,0 +1,76 @@
+---
+title: Architecture
+description: The Meridian mental model - workspaces, projects, environments, and how data flows through the platform.
+updatedAt: 2026-08-20
+---
+
+Understanding four objects explains almost everything in Meridian: **workspaces**, **projects**, **environments**, and **events**.
+
+## The hierarchy
+
+```
+Workspace (your team)
+└── Project (an integration you run)
+    ├── Environment: test
+    │   ├── API keys (mrnd_test_…)
+    │   ├── Webhook endpoints
+    │   └── Events
+    └── Environment: live
+        ├── API keys (mrnd_live_…)
+        ├── Webhook endpoints
+        └── Events
+```
+
+- A **workspace** is your organization. Billing, members, and roles live here.
+- A **project** is a single integration or workload - e.g. "billing-sync" or "notify-on-deploy". Projects isolate configuration, logs, and quotas.
+- An **environment** is an isolated copy of a project's runtime state. `test` and `live` share nothing: keys, webhooks, and event history are separate.
+- An **event** is a record of something that happened - a sync completing, a webhook delivery failing, a member joining. Events power webhooks and the activity log.
+
+## Request lifecycle
+
+1. Your service calls `api.meridian.dev` with an API key.
+2. The edge layer authenticates the key, resolves its environment, and applies rate limits.
+3. The request is routed to the project's **region** (`us-east`, `eu-west`, or `ap-south`), where state is stored.
+4. Mutations emit **events**, which fan out to matching webhook endpoints asynchronously.
+
+<Flow
+  direction="horizontal"
+  caption="Every request travels the same path - the edge layer resolves region and environment from the API key."
+  steps={[
+    { label: "Your app", title: "Client", detail: "TLS 1.3" },
+    { label: "Meridian", title: "Edge", detail: "auth · rate limit", tone: "accent" },
+    { label: "Meridian", title: "Region", detail: "state · logic", tone: "accent" },
+    { label: "Meridian", title: "Event bus", tone: "accent" },
+    { label: "Your app", title: "Webhooks" },
+  ]}
+/>
+
+<Callout type="note">
+  Region is chosen at project creation and cannot be changed later - it determines where project data is stored at rest.
+</Callout>
+
+## Data residency
+
+Each project's data is stored and processed in its home region. API keys are environment-scoped but region-agnostic - the edge layer routes to the right region automatically. There is no cross-region replication; choose the region closest to your workload or required by compliance.
+
+## Failure isolation
+
+Environments are isolated at the data layer, not just logically:
+
+- A `test` key cannot see, modify, or even enumerate `live` resources.
+- Webhook endpoints are registered per environment - test deliveries never hit production endpoints.
+- Rate limits are enforced per environment, so load testing in `test` cannot throttle `live` traffic.
+
+## Read next
+
+<CardGrid>
+  <Card title="Projects" href="/docs/concepts/projects" icon="box">
+    The unit of work: configuration, quotas, and lifecycle.
+  </Card>
+  <Card title="Environments" href="/docs/concepts/environments" icon="layers">
+    Test vs. live, promotion workflows, and sandbox rules.
+  </Card>
+  <Card title="Permissions" href="/docs/concepts/permissions" icon="shield">
+    Roles, restricted keys, and least-privilege setups.
+  </Card>
+</CardGrid>

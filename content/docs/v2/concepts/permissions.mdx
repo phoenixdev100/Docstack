@@ -1,0 +1,83 @@
+---
+title: Permissions
+description: Workspace roles, restricted API keys, and how to set up least-privilege access for a team.
+updatedAt: 2026-08-22
+---
+
+Meridian has two permission layers: **workspace roles** for humans, and **API key scopes** for programs. They are independent - a developer's dashboard role doesn't change what their keys can do, and a key's scopes don't depend on who created it.
+
+## Workspace roles
+
+| Role | Can do |
+| --- | --- |
+| **Owner** | Everything, including billing, member management, and workspace deletion |
+| **Admin** | Manage projects, keys, webhooks, and members (not billing or owners) |
+| **Developer** | Create and manage projects, keys, and webhooks - cannot manage members |
+| **Viewer** | Read-only access to projects, logs, and events - cannot create keys |
+
+Roles can be assigned per environment: a contractor can be a **developer** in `test` and a **viewer** in `live`.
+
+## API key scopes
+
+Restricted keys carry explicit resource scopes in `resource:action` form:
+
+| Scope | Allows |
+| --- | --- |
+| `projects:read` | `GET /projects`, `GET /projects/:id` |
+| `projects:write` | `POST`, `PATCH`, `DELETE /projects*` |
+| `webhooks:read` | List/get webhook endpoints and deliveries |
+| `webhooks:write` | Create, update, delete endpoints; replay deliveries |
+| `events:read` | `GET /events` |
+| `members:read` | List workspace members |
+| `*:read` / `*:write` | Wildcards across all resources |
+
+A key with `projects:read` calling `POST /projects` gets `403 insufficient_scope`.
+
+```json title="insufficient_scope response"
+{
+  "error": {
+    "type": "permission_error",
+    "code": "insufficient_scope",
+    "message": "This key requires the projects:write scope for POST /v2/projects.",
+    "request_id": "req_8fK2mPx4vL"
+  }
+}
+```
+
+## Recommended setups
+
+**CI pipeline** - one restricted key per pipeline:
+
+```text
+scopes:    projects:read, events:read
+expiry:    90 days
+allowlist: your CI egress CIDRs
+```
+
+**Production service** - write access only to what it needs:
+
+```text
+scopes:    projects:read, webhooks:write
+expiry:    none (rotate quarterly)
+allowlist: service egress IPs
+```
+
+**Local development** - personal test key, unrestricted, no allowlist needed.
+
+<Callout type="tip" title="Least privilege, by default">
+  If a service only reads events, give it `events:read` and nothing else. Scope creep in credentials is the most common audit finding.
+</Callout>
+
+## Audit trail
+
+Every authenticated action is logged with the key ID, IP, and affected resources. The **Audit log** (dashboard → workspace settings) retains 13 months of entries and can be streamed to your SIEM via the `audit_log.exported` webhook event.
+
+## Member lifecycle
+
+1. Invite by email from **Settings → Members** with an initial role.
+2. Roles and per-environment access can be changed at any time - changes take effect immediately.
+3. Removing a member revokes their dashboard access and all keys they personally created within ~30 seconds.
+
+<Callout type="warning">
+  Keys created through a service account stay active when the creator is removed - that is their purpose. Name them clearly (`svc-billing-ci`) so ownership is obvious.
+</Callout>
