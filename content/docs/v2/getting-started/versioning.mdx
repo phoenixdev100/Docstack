@@ -1,0 +1,67 @@
+---
+title: Versioning policy
+description: How Meridian versions its API - what counts as breaking, how deprecations are announced, and support windows.
+updatedAt: 2026-09-05
+---
+
+Meridian's API versions are URL-prefixed (`/v1`, `/v2`). Within a version, the surface evolves by additive change only - breaking changes ship as a new major version.
+
+## What's a breaking change
+
+We treat these as breaking and only ship them in a new major version:
+
+- Removing or renaming a field, endpoint, event type, or error code
+- Changing a field's type or semantics (e.g., `PUT` → `PATCH` semantics)
+- Tightening validation so previously-accepted requests fail
+- Changing default behavior in a way that alters existing integrations
+
+## What's *not* breaking - shipped continuously in v2
+
+Your integration must tolerate these:
+
+- **New fields** in response objects (additive)
+- **New event types** - subscribe narrowly if unknown types would break you
+- **New error codes** under an existing `type` - branch on `code`, not `message`
+- **New optional parameters**
+- Field reordering in JSON (objects are unordered - always parse, never regex)
+
+<Callout type="warning">
+  If your client treats any of the above as an error, it's brittle - this is the #1 cause of integrations breaking on a "no breaking changes" release. SDKs handle all of them correctly.
+</Callout>
+
+## Version lifecycle
+
+| Stage | Meaning |
+| --- | --- |
+| **Current** | Receives all new features. Currently `v2`. |
+| **Maintenance** | Security and bug fixes only, no new features. Currently `v1`. |
+| **Deprecated** | Still served, but EOL date announced. Sunset warnings in docs + `Sunset` response header. |
+| **Retired** | Endpoints return `410 Gone` permanently. |
+
+## Support windows
+
+- **Major versions** are supported for a minimum of **24 months** after the next major ships.
+- **Deprecation → retirement** notice is at least **6 months**, announced via changelog, docs banner, dashboard, and the `Sunset` HTTP header on affected responses.
+- **SDKs** follow semver - a major API version maps to a major SDK version; older SDK majors get security fixes for 12 months.
+
+## The `Sunset` header
+
+Deprecated endpoints send:
+
+```http title="Deprecation signal"
+Sunset: Sat, 31 Mar 2027 23:59:59 GMT
+Deprecation: true
+Link: <https://docs.meridian.dev/docs/guides/migrate-v1-v2>; rel="deprecation"
+```
+
+Monitor for it - a response carrying `Deprecation: true` is telling you the endpoint has an announced EOL date.
+
+## Choosing which docs you're reading
+
+The version switcher (top navbar) selects the doc set: `v2` pages have clean URLs (`/docs/api`), older versions are prefixed (`/docs/v1/api`). Content differs - don't assume a v1 page documents v2 behavior.
+
+## Recommended posture
+
+- Pin nothing client-side - always call the versioned URL you intend.
+- Subscribe to the [changelog](/docs/changelog) for deprecation notices.
+- Migrate off deprecated versions inside the 6-month window, not at the deadline - see [Migrate v1 → v2](/docs/guides/migrate-v1-v2).

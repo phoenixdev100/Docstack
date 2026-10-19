@@ -1,0 +1,64 @@
+---
+title: Sandbox & testing
+description: How to test integrations safely - the test environment, simulated scenarios, fixtures, and triggering events on demand.
+updatedAt: 2026-09-12
+---
+
+Meridian's `test` environment is a full sandbox: real API behavior, fake data, and controls for simulating scenarios you can't easily produce on demand.
+
+## What test mode gives you
+
+- Real request/response behavior against `api.meridian.dev/v2` - same code paths as live.
+- `mrnd_test_` keys that cannot touch live resources, ever.
+- Separate webhook endpoints, event history, and rate limits (600 req/min).
+- Simulated objects - every resource is marked `environment: "test"`.
+
+## Simulating scenarios
+
+Some behaviors are hard to trigger organically. Test mode adds control endpoints under `/v2/simulate`:
+
+### Trigger an event
+
+```bash title="Fire a test event"
+curl -X POST https://api.meridian.dev/v2/simulate/events \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "prj_9kLm2xVb7nQe",
+    "type": "project.updated"
+  }'
+```
+
+Creates a real `evt_` event in test - it flows through the event bus and delivers to your subscribed endpoints exactly like a genuine one. Use it to test webhook handlers end-to-end without building the feature that emits the event.
+
+### Force a delivery outcome
+
+```bash title="Simulate a failed delivery"
+curl -X POST https://api.meridian.dev/v2/simulate/deliveries \
+  -d '{"endpoint_id": "wh_2nQ8kLm4xP", "response_status": 500}' \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+`response_status` accepts `2xx`, `4xx`, `5xx`, or `timeout` - exercises your retry, alerting, and dead-letter handling.
+
+## Test fixtures
+
+For repeatable CI, the examples repo ships fixture payloads you can replay:
+
+```bash title="Run a fixture delivery"
+meridian simulate delivery --fixture fixtures/project-updated.json
+```
+
+## Test data conventions
+
+- Test objects are prefixed the same as live (`prj_`, `evt_`) - the *environment* distinguishes them, not the ID format.
+- All test events carry `environment: "test"` - assert on it in handlers to reject accidental live traffic.
+- Test data is purged every **30 days** - don't rely on long-lived fixtures; recreate them per run.
+
+## Load testing
+
+Test mode allows load testing within the `test` rate limit (600 req/min). For sustained higher-throughput tests, contact support for a temporary quota bump - see [Load testing](/docs/guides/load-testing).
+
+<Callout type="warning">
+  Never test against `live` with production credentials "just to check." Everything you need to validate works identically in `test` - including failure paths via `/v2/simulate`.
+</Callout>

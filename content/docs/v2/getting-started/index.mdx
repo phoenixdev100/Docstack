@@ -1,0 +1,68 @@
+---
+title: Introduction
+description: Meridian is a platform for running production integrations. These docs cover the REST API, SDKs, webhooks, and everything in between.
+updatedAt: 2026-09-01
+---
+
+Meridian is a platform for building, deploying, and operating integrations between your application and external services. You create a **project**, connect it to your systems through the REST API or an SDK, and Meridian handles execution, retries, event delivery, and observability.
+
+This documentation covers everything you need to build on Meridian - from your first authenticated request to production hardening.
+
+## How the docs are organized
+
+<CardGrid>
+  <Card title="Getting started" href="/docs/getting-started/quickstart" icon="zap">
+    Set up an account, get your API key, and make a request in five minutes.
+  </Card>
+  <Card title="Concepts" href="/docs/concepts/architecture" icon="layers">
+    The mental model: projects, environments, permissions, and data flow.
+  </Card>
+  <Card title="Guides" href="/docs/guides/first-integration" icon="book">
+    Task-oriented walkthroughs for real integration work.
+  </Card>
+  <Card title="API reference" href="/docs/api" icon="code">
+    Complete reference for every endpoint, parameter, and error.
+  </Card>
+</CardGrid>
+
+## What you can build
+
+- **Data sync pipelines** - keep external systems in sync with your database using scheduled or event-driven syncs.
+- **Webhook infrastructure** - subscribe to events, verify signatures, and handle deliveries with automatic retries.
+- **Automated workflows** - chain API calls, transform payloads, and react to state changes without running your own workers.
+
+## A first look
+
+Every interaction with Meridian is an HTTPS call to `https://api.meridian.dev/v2` authenticated with a Bearer token:
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```json title="Response"
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "prj_1fK2nV9xQe",
+      "name": "billing-sync",
+      "region": "us-east",
+      "environment": "live",
+      "created_at": "2026-08-14T09:31:07Z"
+    }
+  ],
+  "has_more": false,
+  "next_cursor": null
+}
+```
+
+<Callout type="tip">
+  New here? Start with the [Quickstart](/docs/getting-started/quickstart) - it takes about five minutes and ends with a working integration.
+</Callout>
+
+## Getting help
+
+- **Search** - press `⌘K` (or `Ctrl+K`) anywhere in the docs.
+- **Status** - check [status.meridian.dev](https://status.meridian.dev) during incidents.
+- **Support** - engineering support is available on all paid plans from the [dashboard](https://app.meridian.dev).

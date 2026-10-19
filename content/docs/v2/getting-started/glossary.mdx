@@ -1,0 +1,83 @@
+---
+title: Glossary
+description: Definitions for every term used across the Meridian platform and documentation.
+updatedAt: 2026-09-17
+---
+
+Terms used throughout Meridian's docs, API, and dashboard.
+
+## A
+
+**API key** - Secret credential (`mrnd_test_…` / `mrnd_live_…`) sent as a Bearer token. Determines the environment a request runs in.
+
+**Audit log** - Immutable record of administrative actions (key creation, role changes, exports) retained for compliance. See [Audit logs](/docs/security/audit-logs).
+
+## B
+
+**Backoff** - Increasing delay between retries; Meridian uses exponential backoff with jitter for both API retries and webhook redelivery.
+
+## C
+
+**Cursor** - Opaque `cur_` token marking a position in a list. Pass it back to get the next page - never construct one yourself.
+
+## D
+
+**Delivery** - One attempt to POST an event payload to a webhook endpoint. At-least-once; see `dlv_` objects in [Webhooks](/docs/api/webhooks).
+
+**Deprecated** - Feature that still works but is no longer recommended; removal announced in the changelog ahead of time.
+
+## E
+
+**Endpoint** - HTTPS URL registered to receive webhook deliveries (`wh_` object).
+
+**Environment** - `test` or `live`: two isolated copies of a project's runtime. Set by which key you send, not a flag. See [Environments](/docs/concepts/environments).
+
+**Event** - Immutable record (`evt_`) of something that happened in a project. Source for webhooks and the activity feed. See [Events](/docs/api/events).
+
+## I
+
+**Idempotency key** - Client-generated token that makes a `POST` safe to retry: the same key + body returns the original response instead of duplicating. See [Idempotent requests](/docs/guides/idempotency).
+
+## L
+
+**Live environment** - The production environment. `mrnd_live_` keys, real data, stricter quotas.
+
+## M
+
+**Metadata** - Free-form `key: value` map on resources (projects, endpoints) for your own tagging - never used by Meridian.
+
+## P
+
+**Project** - The unit of work: configuration, quotas, webhooks, and events. `prj_` object; see [Projects](/docs/concepts/projects).
+
+**Previous attributes** - In `*.updated` events, the field values before the change - used to diff without a second fetch.
+
+## R
+
+**Region** - Geographic home of a project (`us-east`, `eu-west`, `ap-south`). Immutable at creation; controls residency and latency.
+
+**Request ID** - `req_` identifier returned in `Meridian-Request-Id` and error bodies - quote it to support for tracing.
+
+**Restricted key** - API key with explicit `resource:action` scopes instead of full access. See [Authentication](/docs/api/authentication).
+
+## S
+
+**Sequence** - Monotonic integer per project on every event. Use it - not timestamps - for ordering.
+
+**Service account** - Non-human workspace member for automation (`kind: service_account`), with its own roles.
+
+**Signature** - HMAC-SHA256 over `timestamp.body` in the `Meridian-Signature` header - proves a delivery came from Meridian.
+
+**Soft delete / archive** - Deletion that retains configuration for 30 days and allows restore. Projects archive; keys hard-delete.
+
+## T
+
+**Test environment** - The sandbox: `mrnd_test_` keys, fake data, separate webhooks and events from live.
+
+**Tolerance** - Max age a signature timestamp may have (default 5 min) before verification rejects it as a replay.
+
+## W
+
+**Webhook** - The delivery mechanism overall; a **webhook endpoint** is the registered URL receiving deliveries.
+
+**Workspace** - Top-level organization: billing, members, and roles. Contains many projects.
