@@ -1,0 +1,138 @@
+---
+title: Installation
+description: Install an official Meridian SDK for JavaScript, Python, Go, Java, or Ruby - or call the REST API directly.
+updatedAt: 2026-08-28
+---
+
+You can talk to Meridian two ways: the REST API directly over HTTPS, or through an official SDK that handles auth, retries, pagination, and types for you. SDKs are recommended for anything beyond quick experiments.
+
+## SDKs
+
+<Tabs>
+  <Tab label="JavaScript">
+
+Requires Node.js 18.17 or later. Works in Node, Deno, Bun, and edge runtimes.
+
+```bash title="npm"
+npm install @meridian/sdk
+```
+
+```bash title="yarn"
+yarn add @meridian/sdk
+```
+
+```bash title="pnpm"
+pnpm add @meridian/sdk
+```
+
+```javascript title="index.js"
+import { Meridian } from "@meridian/sdk";
+
+const client = new Meridian(process.env.MERIDIAN_API_KEY);
+```
+
+  </Tab>
+  <Tab label="Python">
+
+Requires Python 3.9 or later. Ships with type hints and async support via `AsyncMeridian`.
+
+```bash title="pip"
+pip install meridian
+```
+
+```bash title="poetry"
+poetry add meridian
+```
+
+```python title="main.py"
+import os
+from meridian import Meridian
+
+client = Meridian(os.environ["MERIDIAN_API_KEY"])
+```
+
+  </Tab>
+  <Tab label="Go">
+
+Requires Go 1.21 or later.
+
+```bash title="Terminal"
+go get github.com/meridian/meridian-go/v2
+```
+
+```go title="main.go"
+import (
+    "github.com/meridian/meridian-go/v2"
+)
+
+client := meridian.NewClient(os.Getenv("MERIDIAN_API_KEY"))
+```
+
+  </Tab>
+  <Tab label="Java">
+
+Requires Java 11 or later. Available on Maven Central.
+
+```xml title="pom.xml"
+<dependency>
+  <groupId>dev.meridian</groupId>
+  <artifactId>meridian-java</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+```kotlin title="build.gradle.kts"
+implementation("dev.meridian:meridian-java:1.0.0")
+```
+
+  </Tab>
+  <Tab label="Ruby">
+
+Requires Ruby 3.0 or later.
+
+```bash title="Terminal"
+gem install meridian
+```
+
+```ruby title="Gemfile"
+gem "meridian", "~> 1.0"
+```
+
+  </Tab>
+</Tabs>
+
+## Without an SDK
+
+The REST API is plain HTTPS + JSON. Any HTTP client works:
+
+| Detail | Value |
+| --- | --- |
+| Base URL | `https://api.meridian.dev/v2` |
+| Auth | `Authorization: Bearer <key>` header |
+| Request body | `application/json` |
+| Response | `application/json`, always an object |
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Versioning and upgrades
+
+- The API is versioned by URL path (`/v2`). Breaking changes ship under a new path, never in place.
+- SDKs follow semver. Pin major versions in your dependency manifest.
+- Deprecations are announced in the [changelog](/docs/changelog) at least 6 months before removal.
+
+<Callout type="note">
+  Running an older version? Use the version switcher in the sidebar to browse the [v1 docs](/docs/v1/api). v1 reaches end-of-life on **2027-03-31**.
+</Callout>
+
+## Runtime requirements
+
+| SDK | Minimum version | Package |
+| --- | --- | --- |
+| JavaScript | Node.js 18.17 | `@meridian/sdk` |
+| Python | 3.9 | `meridian` |
+| Go | 1.21 | `meridian-go/v2` |
+| Java | 11 | `dev.meridian:meridian-java` |
+| Ruby | 3.0 | `meridian` |

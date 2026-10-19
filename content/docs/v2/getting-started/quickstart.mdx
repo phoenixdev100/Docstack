@@ -1,0 +1,104 @@
+---
+title: Quickstart
+description: Create an account, get an API key, and make your first request in under five minutes.
+updatedAt: 2026-09-01
+---
+
+This guide walks you from zero to a working API call against the Meridian **test environment**. You will create an API key, create a project, and read it back.
+
+## Prerequisites
+
+- A Meridian account - [sign up free](https://app.meridian.dev/signup) if you don't have one.
+- `curl`, or one of the [official SDKs](/docs/sdks/javascript) installed.
+- A terminal with your API key exported as an environment variable.
+
+## 1. Get an API key
+
+Every workspace ships with two environments: `test` and `live`. API keys are scoped to one environment.
+
+1. Open the [dashboard](https://app.meridian.dev) → **Developers** → **API keys**.
+2. Click **Create key**, choose the **test** environment, and copy the key. It starts with `mrnd_test_`.
+
+<Callout type="important" title="Store your key securely">
+  API keys are shown once at creation. Store them in a secrets manager or environment variable - never in source control or client-side code.
+</Callout>
+
+```bash title="Terminal"
+export MERIDIAN_API_KEY=mrnd_test_4f8e2c1a9b7d3e5f6a0c
+```
+
+## 2. Create a project
+
+A project is the container for everything you build - connections, webhooks, and sync jobs all live inside one.
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-first-project", "region": "us-east"}'
+```
+
+```javascript title="JavaScript"
+import { Meridian } from "@meridian/sdk";
+
+const client = new Meridian(process.env.MERIDIAN_API_KEY);
+
+const project = await client.projects.create({
+  name: "my-first-project",
+  region: "us-east",
+});
+```
+
+```python title="Python"
+import os
+from meridian import Meridian
+
+client = Meridian(os.environ["MERIDIAN_API_KEY"])
+
+project = client.projects.create(
+    name="my-first-project",
+    region="us-east",
+)
+```
+
+</CodeTabs>
+
+<ResponseExample
+  status={201}
+  code={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "my-first-project",
+  "region": "us-east",
+  "environment": "test",
+  "created_at": "2026-09-17T10:24:31Z"
+}`}
+/>
+
+## 3. Read it back
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+A `200 OK` response means your key, environment, and project are all wired up correctly.
+
+## What's next
+
+<CardGrid>
+  <Card title="Authentication" href="/docs/getting-started/authentication" icon="key">
+    Key types, scopes, and how environments isolate traffic.
+  </Card>
+  <Card title="Build your first integration" href="/docs/guides/first-integration" icon="zap">
+    A complete walkthrough: create, sync, webhook, verify.
+  </Card>
+  <Card title="JavaScript SDK" href="/docs/sdks/javascript" icon="box">
+    Full method reference for @meridian/sdk.
+  </Card>
+  <Card title="API reference" href="/docs/api" icon="code">
+    Every endpoint and parameter, with examples.
+  </Card>
+</CardGrid>

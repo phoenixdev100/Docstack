@@ -1,0 +1,67 @@
+---
+title: Authentication
+description: How API keys, environments, and scopes work - and how to keep credentials safe.
+updatedAt: 2026-09-02
+---
+
+All API requests authenticate with a **Bearer API key** in the `Authorization` header. Keys are scoped to an environment (`test` or `live`) and can be restricted to specific permissions.
+
+```http title="Request header"
+Authorization: Bearer mrnd_test_4f8e2c1a9b7d3e5f6a0c
+```
+
+## Key types
+
+| Type | Prefix | Environment | Use |
+| --- | --- | --- | --- |
+| Secret key | `mrnd_test_…` | test | Server-side development and CI |
+| Secret key | `mrnd_live_…` | live | Production server-side calls |
+| Restricted key | `mrnd_rk_…` | either | Scoped to specific resources/permissions |
+
+There are **no publishable keys**. Meridian keys must never appear in browsers, mobile apps, or other client-side code - there is no safe client-side key.
+
+## Scopes and restricted keys
+
+Restricted keys limit what a credential can do. Create them in **Dashboard → Developers → API keys → Create restricted key**:
+
+- **Resource scopes** - e.g. `projects:read`, `webhooks:write`, `events:read`
+- **IP allowlist** - optional CIDR ranges the key can be used from
+- **Expiry** - optional automatic expiry date
+
+A restricted key calling outside its scope returns `403 forbidden` with error code `insufficient_scope`.
+
+<Callout type="tip">
+  Give each service its own restricted key. When a key leaks you can rotate exactly one credential instead of an incident-wide rotation.
+</Callout>
+
+## Key rotation
+
+Keys can be rotated without downtime:
+
+1. Create a replacement key with the same scopes.
+2. Deploy the new key to your services.
+3. Revoke the old key from the dashboard or with `DELETE /keys/:id`.
+
+Revoked keys stop working within ~30 seconds. Requests with a revoked key return `401 unauthorized` (`invalid_api_key`).
+
+## Keeping keys safe
+
+- Store keys in environment variables or a secrets manager - never in git.
+- Use the `test` environment for anything that isn't production traffic.
+- Add IP allowlists to restricted keys used in fixed infrastructure.
+- Meridian never asks for your API key in support channels.
+
+<Callout type="warning">
+  If a key is exposed, revoke it immediately from the dashboard. Compromised keys cannot be re-enabled - rotation is the only remediation.
+</Callout>
+
+## Errors
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `401` | `missing_api_key` | No `Authorization` header sent |
+| `401` | `invalid_api_key` | Key is malformed, revoked, or expired |
+| `403` | `insufficient_scope` | Restricted key lacks the required scope |
+| `403` | `environment_mismatch` | Test key used against live-only resource |
+
+See [Error handling](/docs/guides/error-handling) for retry guidance and the full error reference.
