@@ -1,0 +1,99 @@
+---
+title: Local development
+description: Set up a productive local loop - env vars, tunneling webhooks to localhost, fixtures, and seed data.
+updatedAt: 2026-08-29
+---
+
+Everything you need to develop against Meridian without deploying.
+
+## Environment variables
+
+```bash title=".env"
+MERIDIAN_API_KEY=mrnd_test_4f8e2c1a9b7d3e5f6a0c
+WEBHOOK_SECRET=whsec_8fK2mPx4vL9nQe3dR7wT1yH5
+```
+
+- Only `test` keys locally - never `.env` a `mrnd_live_` key.
+- SDKs read `MERIDIAN_API_KEY` automatically when no key is passed.
+
+## Tunneling webhooks to localhost
+
+Endpoints in `test` accept non-HTTPS tunnel URLs - expose your local server:
+
+<CodeTabs>
+
+```bash title="ngrok"
+ngrok http 3000
+# → https://a1b2c3.ngrok.app
+```
+
+```bash title="cloudflared"
+cloudflared tunnel --url http://localhost:3000
+# → https://random-words.trycloudflare.com
+```
+
+```bash title="Meridian CLI"
+meridian listen --forward localhost:3000/webhooks/meridian
+# built-in tunnel + live delivery log
+```
+
+</CodeTabs>
+
+Register the tunnel URL as a test endpoint - then every test event hits your local handler in real time.
+
+## CLI shortcuts
+
+The `meridian` CLI is the fastest local loop:
+
+```bash title="Everyday commands"
+meridian listen --forward localhost:3000/webhooks/meridian   # tunnel + tail
+meridian events tail --project prj_9kLm2xVb7nQe              # live event feed
+meridian simulate event --type project.updated               # fire a test event
+meridian projects list                                       # quick API calls
+```
+
+`meridian listen` prints each delivery (payload, headers, your response status) - the local equivalent of the dashboard's delivery log.
+
+## Fixtures and seed data
+
+For repeatable setups, keep fixtures in your repo:
+
+```json title="fixtures/project.json"
+{
+  "name": "dev-fixture",
+  "region": "us-east",
+  "metadata": { "purpose": "local-dev" }
+}
+```
+
+```bash title="Seed from fixtures"
+meridian projects create --file fixtures/project.json
+meridian simulate event --type project.updated --project <id>
+```
+
+The [examples repo](https://github.com/meridian/examples) ships ready-made fixtures for every event type under `fixtures/`.
+
+## Suggested project layout
+
+<FileTree
+  items={[
+    { name: ".env", note: "test key + whsec_ - gitignored" },
+    { name: "fixtures", children: [
+      { name: "project.json" },
+      { name: "project-updated.json", note: "event payload" },
+    ]},
+    { name: "src", children: [
+      { name: "webhooks", children: [
+        { name: "handler.ts", highlight: true, note: "verify + process" },
+      ]},
+      { name: "lib", children: [{ name: "meridian.ts", note: "client init" }] },
+    ]},
+    { name: ".env.example", note: "committed - keys documented, values blank" },
+  ]}
+/>
+
+## Common pitfalls
+
+- **Signature fails locally** - you're parsing JSON before verifying. The handler must read the **raw body** (see [Webhooks](/docs/guides/webhooks#verifying-signatures)).
+- **404 on a resource that "exists"** - it exists in `live`; your local key is `test`. Check the environment.
+- **Tunnel drops events** - free tunnels sleep; re-register the new URL, or use `meridian listen` which keeps a stable address while running.

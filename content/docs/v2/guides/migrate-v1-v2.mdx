@@ -1,0 +1,95 @@
+---
+title: Migrate v1 → v2
+description: Step-by-step migration from API v1 to v2 - pagination, error shape, webhook signatures, and the cutover checklist.
+updatedAt: 2026-09-10
+---
+
+v1 reaches end-of-life on **2027-03-31**. This guide walks the migration in order of effort - most integrations complete it in a day. The five real differences:
+
+| Area | v1 | v2 |
+| --- | --- | --- |
+| Pagination | `page`/`per_page` + `total` | `cursor`/`limit` + `has_more` |
+| Errors | `{ "error": "string" }` | Structured `error` object + `code` |
+| Webhook signature | `X-Meridian-Signature` (HMAC of body) | `Meridian-Signature` (timestamped) |
+| Environments | `?env=` query param | Determined by the key itself |
+| Updates | `PUT` (full replace) | `PATCH` (partial) |
+
+<Steps>
+  <Step title="Update your base URL">
+    `/v1` → `/v2`. If you use an SDK, upgrade to the current major version instead - it handles everything below.
+
+    <CodeTabs>
+      ```bash title="Before"
+      curl "https://api.meridian.dev/v1/projects?env=test"
+      ```
+      ```bash title="After"
+      curl "https://api.meridian.dev/v2/projects"
+      ```
+    </CodeTabs>
+  </Step>
+
+  <Step title="Replace offset pagination">
+    v1 loops over `page`/`per_page`; v2 walks a cursor. If you paginate manually, port to this pattern:
+
+    ```javascript title="v2 pagination"
+    let cursor;
+    do {
+      const page = await client.projects.listPage({ limit: 100, cursor });
+      process(page.data);
+      cursor = page.nextCursor;      // null when done
+    } while (cursor);
+    ```
+
+    `total` is gone - if you displayed counts, fetch once to count or drop it.
+  </Step>
+
+  <Step title="Handle the new error shape">
+    v1 gave you a string; v2 gives `{ error: { type, code, message, request_id } }`. Branch on `code`, never on the message text.
+
+    ```javascript title="Normalize during migration"
+    const code = typeof body.error === "object"
+      ? body.error.code        // v2
+      : `v1_http_${status}`;   // v1 fallback
+    ```
+  </Step>
+
+  <Step title="Update webhook verification">
+    The signature scheme gained a timestamp (replay protection) and moved headers:
+
+    - `X-Meridian-Signature` → `Meridian-Signature`
+    - HMAC over `body` → HMAC over `timestamp.body`
+    - Reject timestamps older than 5 minutes
+
+    Use the SDK verifier (`verifyWebhookSignature`) rather than porting your own - see [Webhooks](/docs/guides/webhooks).
+  </Step>
+
+  <Step title="Drop ?env= and check PUT callers">
+    `?env=test` is gone - the key chooses the environment (`mrnd_test_` vs `mrnd_live_`). Swap `PUT` calls to `PATCH` and send only changed fields.
+  </Step>
+</Steps>
+
+## Namespace isolation
+
+v1 and v2 resources are **separate namespaces**: a `prj_` created via v1 doesn't appear in v2 lists, and vice versa. Plan accordingly:
+
+- **Greenfield resources**: create all new projects/keys in v2.
+- **Existing resources**: keep reading them via v1 until you recreate them in v2, or contact support about a namespace migration.
+- **Keys**: version-agnostic - your existing keys work on `/v2` paths immediately.
+
+## Cutover checklist
+
+<Checklist id="migrate-v1-v2" items={[
+  "Upgrade SDK to v2-compatible major",
+  "Replace offset pagination with cursor loops",
+  "Branch errors on error.code, not message text",
+  "Update webhook signature verification",
+  "Remove ?env= params - use env-scoped keys",
+  "Convert PUT calls to PATCH",
+  "Watch for Sunset/Deprecation headers on v1 calls",
+  "Run both versions in parallel for one week",
+  "Decommission v1 paths and keys",
+]} />
+
+<Callout type="tip">
+  Dual-run tip: log `Meridian-Request-Id` on every call during migration - support can diff v1 vs v2 behavior by request ID if anything diverges unexpectedly.
+</Callout>

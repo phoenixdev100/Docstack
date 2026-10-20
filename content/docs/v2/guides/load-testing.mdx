@@ -1,0 +1,99 @@
+---
+title: Load testing
+description: Running load tests against Meridian - what's allowed, rate limits, temporary quotas, and how to structure a test.
+updatedAt: 2026-08-27
+---
+
+You may load test against Meridian - in the **`test` environment only**. This page covers the rules and how to structure a meaningful test.
+
+## Rules
+
+1. **Test environment only.** `mrnd_test_` keys exclusively - live keys are never for load generation.
+2. **Stay inside your test quota** (600 req/min by default) unless you've been granted a temporary bump.
+3. **No destructive floods** - don't hammer delete/restore cycles or delivery replays; they're heavier than reads.
+4. **Identify yourself** - send a `X-Load-Test: <name>` header so our ops team can distinguish your traffic from abuse patterns.
+
+## Request a quota bump
+
+For sustained tests above 600 req/min, contact support 3+ business days ahead with:
+
+- Target RPS and duration
+- Time window (we prefer off-peak hours in your region)
+- Which endpoints you'll exercise
+
+Approved bumps are temporary (typically 4–24h) and apply to your test environment only.
+
+## Structuring a test
+
+<Steps>
+  <Step title="Seed fixture data">
+    Create the projects/keys your test needs via `/v2/simulate` or a seed script - don't create resources inside the measured loop.
+
+    ```bash title="Seed once"
+    meridian projects create --file fixtures/load-test.json
+    ```
+  </Step>
+
+  <Step title="Warm up, then measure">
+    Ramp over 1–2 minutes before taking numbers - cold-start latencies distort results. Keep the measurement window ≥5 minutes for stable percentiles.
+  </Step>
+
+  <Step title="Watch the rate-limit headers">
+    `X-RateLimit-Remaining` and `Retry-After` tell you when you're brushing the quota - a load test should measure *your* bottleneck, not ours.
+
+    ```http title="Per-response budget signals"
+    X-RateLimit-Limit: 600
+    X-RateLimit-Remaining: 41
+    X-RateLimit-Reset: 1726570000
+    ```
+  </Step>
+
+  <Step title="Clean up">
+    Archive test projects after the run - test data purges in 30 days anyway, but tidy fixtures keep dashboards readable.
+  </Step>
+</Steps>
+
+## Tooling
+
+Standard tools work fine against the REST API:
+
+<CodeTabs>
+
+```bash title="k6"
+k6 run - <<'EOF'
+import http from 'k6/http';
+export const options = { vus: 20, duration: '5m' };
+export default function () {
+  http.get('https://api.meridian.dev/v2/projects', {
+    headers: {
+      Authorization: `Bearer ${__ENV.MERIDIAN_API_KEY}`,
+      'X-Load-Test': 'k6-baseline',
+    },
+  });
+}
+EOF
+```
+
+```bash title="vegeta"
+echo "GET https://api.meridian.dev/v2/projects" | \
+  vegeta attack -rate=10/s -duration=5m \
+    -header="Authorization: Bearer $MERIDIAN_API_KEY" \
+    -header="X-Load-Test: vegeta-baseline" | \
+  vegeta report
+```
+
+</CodeTabs>
+
+## What to measure
+
+- **p50/p95/p99 latency** per endpoint - our published targets are in [Status](/docs/resources/status).
+- **Error rate** - anything above a trace of `429`/`5xx` means you're above quota or hitting a real issue.
+- **Retry behavior** - confirm your client's backoff doesn't stampede; good tests measure recovery, not just throughput.
+
+## Webhooks under load
+
+Load-testing your *receiver*: use `/v2/simulate/deliveries` to fan out test events at rate, or point several endpoints at the same URL. Deliveries in test are rate-limited the same as live, so the distribution is representative.
+
+<Callout type="important">
+  Load tests against `live` are a terms-of-service violation - automated traffic there can trigger abuse protections that suspend keys. `test` exists precisely for this.
+</Callout>
