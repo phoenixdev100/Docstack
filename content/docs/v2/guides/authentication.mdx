@@ -1,0 +1,106 @@
+---
+title: Authentication guide
+description: Practical patterns for credentials - environment injection, restricted keys, rotation, and common mistakes.
+updatedAt: 2026-08-25
+---
+
+This guide covers how to wire API credentials into a real application. For the conceptual model see [Authentication](/docs/getting-started/authentication).
+
+## Injecting keys per environment
+
+The only thing that should differ between dev, staging, and prod is the key value. Inject it through configuration, never code:
+
+<CodeTabs>
+
+```javascript title="config.js"
+// Works in every environment - the key decides which one it hits.
+export const meridian = new Meridian(process.env.MERIDIAN_API_KEY);
+```
+
+```python title="config.py"
+import os
+from meridian import Meridian
+
+meridian = Meridian(os.environ["MERIDIAN_API_KEY"])
+```
+
+</CodeTabs>
+
+```bash title=".env (gitignored)"
+MERIDIAN_API_KEY=mrnd_test_4f8e2c1a9b7d3e5f6a0c
+```
+
+<Callout type="warning">
+  Never commit `.env` files. Add `.env*` to `.gitignore` and use your platform's secret store (GitHub Actions secrets, Vercel env vars, AWS SSM, Doppler, …) in deployed environments.
+</Callout>
+
+## Choosing scopes
+
+Map each service to the minimum scope set it needs:
+
+| Service | Calls | Scopes |
+| --- | --- | --- |
+| Read-only dashboard | `GET /projects`, `GET /events` | `projects:read`, `events:read` |
+| Provisioner | `POST/PATCH/DELETE /projects` | `projects:write` |
+| Webhook manager | endpoint CRUD + replay | `webhooks:write` |
+| Metrics collector | `GET /events` | `events:read` |
+
+```bash title="Create a restricted key"
+curl -X POST https://api.meridian.dev/v2/keys \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "svc-metrics",
+    "scopes": ["events:read"],
+    "expires_in_days": 90
+  }'
+```
+
+## Rotating keys without downtime
+
+The safe rotation order - works for both dashboard and API-driven rotation:
+
+1. **Create** the replacement key with identical scopes.
+2. **Deploy** it (rolling restart, secret refresh, whatever your platform does).
+3. **Verify** traffic on the new key - the dashboard shows per-key last-used timestamps.
+4. **Revoke** the old key.
+
+```bash title="Revoke the old key last"
+curl -X DELETE https://api.meridian.dev/v2/keys/key_7hF2kLm9xQ \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+<Callout type="tip">
+  During the overlap window both keys work - revocation takes ~30 seconds to propagate, so there's no hard cutover to schedule.
+</Callout>
+
+## Diagnosing auth failures
+
+| Symptom | Likely cause |
+| --- | --- |
+| `401 missing_api_key` | Header not sent - check proxy/middleware stripping `Authorization` |
+| `401 invalid_api_key` | Wrong key, revoked, expired, or stray whitespace/newline in env var |
+| `403 insufficient_scope` | Restricted key missing `resource:action` scope |
+| `403 environment_mismatch` | Test key pointed at a live-only resource ID |
+| `404` on a resource that exists | You're in the wrong environment - check the key prefix |
+
+Every error response includes `request_id` - quote it when contacting support; it's the fastest way to trace a call.
+
+## Service accounts
+
+For automation, create a dedicated workspace member marked as a **service account** (Settings → Members → Invite service account):
+
+- Its keys survive staff changes - they aren't tied to a person's membership.
+- Give it the minimum role needed (usually **developer**, `live` environment only).
+- Audit log entries show the service account distinctly from human actions.
+
+## Next steps
+
+<CardGrid>
+  <Card title="Permissions" href="/docs/concepts/permissions" icon="shield">
+    Roles, scopes, and audit trail details.
+  </Card>
+  <Card title="Error handling" href="/docs/guides/error-handling" icon="zap">
+    Retries and idempotency for flaky networks.
+  </Card>
+</CardGrid>

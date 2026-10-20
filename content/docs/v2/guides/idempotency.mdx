@@ -1,0 +1,72 @@
+---
+title: Idempotent requests
+description: How idempotency keys make POSTs safe to retry - semantics, expiry, conflicts, and per-SDK behavior.
+updatedAt: 2026-09-06
+---
+
+Networks fail between "server did the work" and "client got the response." Without idempotency, retrying a `POST` can create the resource twice. The `Idempotency-Key` header makes retries safe.
+
+## How it works
+
+<Flow
+  steps={[
+    { label: "Client", title: "First attempt", code: "POST /v2/projects\nIdempotency-Key: provision-001" },
+    { label: "Meridian", title: "Executed once", detail: "response stored against the key" },
+    { label: "Client", title: "Retry (same key + body)", detail: "timeout/5xx/429 → safe to repeat" },
+    { label: "Meridian", title: "Replayed response", detail: "original result returned - no duplicate created", tone: "success" },
+  ]}
+/>
+
+- Send a unique key per logical operation - UUID, or your own internal ID (`signup_10492_project`).
+- On retry, repeat the **same key and identical body**.
+- Meridian returns the original stored response - including its status code - instead of executing again.
+
+## Semantics
+
+| Rule | Behavior |
+| --- | --- |
+| Key scope | Per API key + endpoint + HTTP method |
+| Lifetime | Keys expire **24 hours** after first use |
+| Conflict | Same key + different body → `409 idempotency_conflict` |
+| Applicability | `POST` only - `GET`/`PATCH`/`DELETE` are already idempotent |
+| Response | Replays status + body + `Idempotent-Replay: true` header |
+
+```http title="Replayed response marker"
+HTTP/1.1 201 Created
+Idempotent-Replay: true
+```
+
+## SDK behavior
+
+All official SDKs attach a key automatically to every `POST` - retries within the SDK's `maxRetries` reuse it, so default SDK calls are already safe:
+
+```typescript title="Auto key, or override per call"
+await client.projects.create(params);                       // auto key
+await client.projects.create(params, {
+  idempotencyKey: `provision-${customerId}`,                // yours instead
+});
+```
+
+## Choosing keys
+
+- **Derive from your operation ID**, not a random per-request value - that's what makes cross-restart retries dedupe correctly. Good: `provision-customer-884`. Bad: `Math.random()`.
+- One key per logical operation; a second operation needs a new key even if the body is identical.
+
+## The conflict error
+
+```json title="409 idempotency_conflict"
+{
+  "error": {
+    "type": "conflict",
+    "code": "idempotency_conflict",
+    "message": "This idempotency key was already used with a different request body.",
+    "request_id": "req_2hF8kLm4xQ"
+  }
+}
+```
+
+If you get this, the key was already consumed by a different payload - generate a fresh key. This is what prevents "same key, different intent" bugs from silently replaying.
+
+<Callout type="tip">
+  Test the behavior in `test`: send the same `POST` + key twice - the second response carries `Idempotent-Replay: true` and creates nothing new.
+</Callout>

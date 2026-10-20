@@ -1,0 +1,152 @@
+---
+title: Error handling
+description: Error response shape, retry strategy, idempotency keys, rate limits, and defensive patterns for the Meridian API.
+updatedAt: 2026-08-30
+---
+
+The API uses conventional HTTP status codes plus a machine-readable `error` object. This guide covers how to react to each failure class correctly - especially retries, which are easy to get dangerously wrong.
+
+## Error shape
+
+```json title="Error response"
+{
+  "error": {
+    "type": "invalid_request",
+    "code": "parameter_missing",
+    "message": "Missing required parameter: name.",
+    "param": "name",
+    "request_id": "req_8fK2mPx4vL",
+    "docs_url": "https://docs.meridian.dev/docs/api/errors#parameter_missing"
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `type` | Coarse class: `authentication`, `permission`, `invalid_request`, `rate_limit`, `conflict`, `api_error` |
+| `code` | Stable machine-readable code - safe to switch on |
+| `message` | Human-readable explanation - log it, don't parse it |
+| `param` | Offending parameter for validation errors |
+| `request_id` | Trace ID, also in the `Meridian-Request-Id` header |
+
+<Callout type="tip">
+  Branch on `code`, never on `message`. Messages are improved over time; codes are contractual.
+</Callout>
+
+## Status code map
+
+| Status | Retry? | Action |
+| --- | --- | --- |
+| `400` invalid_request | no | Fix the request - check `param` and `code` |
+| `401` authentication | no | Check the key is present and well-formed |
+| `403` permission | no | Add scopes or fix environment |
+| `404` not_found | no | Verify the ID - often wrong environment |
+| `409` conflict | sometimes | Safe to retry after resolving the conflict |
+| `429` rate_limit | yes | Back off using `Retry-After` |
+| `5xx` api_error | yes | Retry with exponential backoff + jitter |
+
+## Idempotent retries
+
+The dangerous retry is repeating a write that actually succeeded server-side - e.g. the response was lost to a network reset. `POST` requests accept an **`Idempotency-Key`** header: repeat the same key within 24 hours and you get the original response instead of a duplicate operation.
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Idempotency-Key: provision-acme-2026-09-17-001" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "acme-import", "region": "us-east"}'
+```
+
+```javascript title="JavaScript (automatic)"
+// SDKs attach an idempotency key to every create/update call automatically.
+const project = await client.projects.create(
+  { name: "acme-import", region: "us-east" },
+  { idempotencyKey: "provision-acme-2026-09-17-001" } // optional override
+);
+```
+
+</CodeTabs>
+
+<Callout type="note">
+  `GET`, `PATCH`, and `DELETE` are naturally idempotent - retry them freely. Only `POST` needs an explicit key.
+</Callout>
+
+## Retry policy
+
+The recommended pattern for `429` and `5xx` - and what every official SDK does by default:
+
+```text title="Backoff strategy"
+attempt 1: fail → wait min(2^1, 30)s + jitter → retry
+attempt 2: fail → wait min(2^2, 30)s + jitter → retry
+attempt 3: fail → wait min(2^3, 30)s + jitter → give up, surface error
+```
+
+- **Honor `Retry-After`** on `429` when present - it overrides your computed delay.
+- **Add jitter** (±50%) to avoid thundering-herd retries across your fleet.
+- **Cap attempts** at 3–4; beyond that you're amplifying an outage.
+- **Log `request_id`** on every failure - it's the trace key for support.
+
+```javascript title="Configuring SDK retries"
+const client = new Meridian(key, {
+  maxRetries: 3,          // default
+  timeout: 30_000,        // ms per attempt
+});
+```
+
+## Rate limits
+
+Limits are per environment: `600 req/min` in `test`, `5,000 req/min` in `live`, evaluated on a rolling window per key.
+
+Every response carries:
+
+```http title="Rate limit headers"
+X-RateLimit-Limit: 5000
+X-RateLimit-Remaining: 4987
+X-RateLimit-Reset: 1758092460
+```
+
+At `429` you also get `Retry-After` (seconds). Sustainable pacing beats reactive retrying - if `Remaining` runs low, queue writes.
+
+## Defensive patterns
+
+**Validate locally first.** Type errors and missing params are cheaper caught client-side - SDKs validate required fields before sending.
+
+**Distinguish transient from permanent.** Wrap SDK calls and classify:
+
+```javascript title="Classifying errors"
+import { MeridianError } from "@meridian/sdk";
+
+try {
+  await client.projects.create({ name: "x", region: "us-east" });
+} catch (e) {
+  if (e instanceof MeridianError) {
+    if (e.status === 429 || e.status >= 500) {
+      // transient - safe to retry
+    } else if (e.code === "parameter_missing") {
+      // permanent - fix the call, don't retry
+    }
+    console.error(e.requestId); // always log the trace id
+  }
+}
+```
+
+**Never retry `4xx` blindly.** `400`/`401`/`403`/`404`/`422` fail deterministically - retrying just repeats the mistake.
+
+## Common error codes
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `parameter_missing` | 400 | Required field absent |
+| `parameter_invalid` | 400 | Field failed validation - see `param` |
+| `invalid_api_key` | 401 | Key malformed/revoked/expired |
+| `insufficient_scope` | 403 | Restricted key lacks needed scope |
+| `resource_not_found` | 404 | ID doesn't exist in this environment |
+| `resource_conflict` | 409 | e.g. duplicate `name` in workspace |
+| `rate_limited` | 429 | Over quota - see `Retry-After` |
+| `internal_error` | 500 | Our fault - retry, then contact support if persistent |
+
+<Callout type="warning">
+  Persistent `5xx` or `internal_error` responses mean something is wrong on our side - check [status.meridian.dev](https://status.meridian.dev) and include `request_id` values in any report.
+</Callout>

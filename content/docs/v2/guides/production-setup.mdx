@@ -1,0 +1,70 @@
+---
+title: Production setup
+description: The checklist for taking a Meridian integration live - credentials, webhooks, monitoring, and rollout.
+updatedAt: 2026-09-01
+---
+
+Everything in `test` works identically in `live` - the difference is operational, not functional. This page is the checklist we recommend completing before routing production traffic.
+
+## Credential checklist
+
+- [ ] Live secret key (`mrnd_live_…`) stored in your production secret manager - not in `.env` files, CI logs, or Slack.
+- [ ] Each service uses a **restricted key** scoped to what it calls (e.g. `projects:write`, not `*`).
+- [ ] IP allowlists set on keys used by fixed infrastructure.
+- [ ] A rotation runbook exists: create → deploy → verify → revoke. (Practice it in `test`.)
+- [ ] No key appears in client-side code, mobile bundles, or public repositories - search your codebase for `mrnd_` before launch.
+
+## Webhook checklist
+
+- [ ] Endpoints registered in the **`live` environment** (easy to miss - check the environment badge).
+- [ ] Signature verification enabled with the `live` endpoint's `whsec_` secret - verification code is identical, the secret differs.
+- [ ] Handlers respond within 10 seconds; heavy work is queued async.
+- [ ] Handlers are idempotent - dedupe on `event.id`.
+- [ ] `webhook.endpoint.disabled` alerts route to your on-call channel.
+- [ ] HTTPS endpoints only - `live` rejects plain `http://` URLs.
+
+## Rate limits and resilience
+
+- [ ] SDK retry defaults reviewed (`maxRetries`, `timeout`) for your latency budget.
+- [ ] Idempotency keys on `POST` calls that must not double-execute.
+- [ ] Queue/buffer for burst writes - live limit is 5,000 req/min per key.
+- [ ] Alert on sustained `429`s - they mean you're approaching the ceiling.
+
+## Observability
+
+- [ ] `request_id` logged on every API call and error - it's the support trace key.
+- [ ] Delivery failures monitored via `GET /webhooks/:id/deliveries` or dashboard alerts.
+- [ ] Event history retention understood (90 days in `live`) - export what you must keep longer.
+
+```bash title="Check recent delivery health"
+curl "https://api.meridian.dev/v2/webhooks/wh_2nQ8kLm4xP/deliveries?limit=25" \
+  -H "Authorization: Bearer $MERIDIAN_LIVE_KEY"
+```
+
+## Rollout strategy
+
+Recommended sequence:
+
+1. **Shadow in `live`** - create the project and webhook endpoints in `live` but keep traffic off. Verify event flow with `POST` test mutations.
+2. **Canary** - point one service instance at the live key; watch errors and delivery latency for a few hours.
+3. **Ramp** - roll the key to the rest of the fleet; keep the rollback path (old config) one deploy away.
+4. **Verify** - confirm dashboard metrics match expectations and audit log entries look clean.
+
+<Callout type="warning" title="Regions are immutable">
+  If compliance requires a specific data region, set it at project creation - you cannot migrate a project's region later.
+</Callout>
+
+## Go-live checklist
+
+| Area | Item | Done |
+| --- | --- | --- |
+| Credentials | Live keys in secret manager, restricted scopes | ☐ |
+| Webhooks | Signature verification + idempotent handlers | ☐ |
+| Resilience | Retries, idempotency keys, `429` handling | ☐ |
+| Monitoring | `request_id` logging, delivery alerts | ☐ |
+| Runbook | Rotation + rollback documented | ☐ |
+| Quotas | Expected volume vs. project limits reviewed | ☐ |
+
+<Callout type="tip">
+  Want higher limits or an SLA review before launch? Contact support from the dashboard - include your expected request volume and webhook endpoint count.
+</Callout>

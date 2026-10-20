@@ -1,0 +1,98 @@
+---
+title: Observability
+description: Correlating requests, events, and deliveries - request IDs, log fields, metrics to watch, and debugging workflows.
+updatedAt: 2026-09-01
+---
+
+Meridian exposes the identifiers you need to trace a call from your code, through our edge, to the resource and downstream webhook deliveries. This page is the debugging workflow.
+
+## The correlation chain
+
+<Flow
+  steps={[
+    { label: "Your code", title: "API request", detail: "log the response's request ID" },
+    { label: "Meridian", title: "req_8fK2mPx4vL", detail: "Meridian-Request-Id response header", tone: "accent" },
+    { label: "Meridian", title: "Resource mutation", detail: "creates evt_ event with request_id = req_…" },
+    { label: "Meridian", title: "Deliveries", detail: "dlv_ records link back to the event" },
+  ]}
+/>
+
+Every hop carries the same `request_id` - one identifier traces cause → effect → delivery.
+
+## Request IDs
+
+Every response (success *and* error) returns `Meridian-Request-Id`:
+
+```http title="Response headers"
+Meridian-Request-Id: req_8fK2mPx4vL
+```
+
+**Log it on every call.** It's the single most useful thing when asking support to trace a request - we can pull the full edge-to-handler path by ID.
+
+```typescript title="Capture it"
+try {
+  const project = await client.projects.create(params);
+} catch (e) {
+  if (e instanceof MeridianError) {
+    logger.error("meridian.create failed", {
+      code: e.code, status: e.status, requestId: e.requestId,
+    });
+  }
+}
+```
+
+## Tracing an event to its cause
+
+`GET /events/:id` returns `request_id` - the API call that created the event (`null` for system-generated events):
+
+```json title="evt_ object"
+{
+  "id": "evt_3kR8mPx2vL",
+  "type": "project.updated",
+  "request_id": "req_8fK2mPx4vL",
+  "sequence": 10492
+}
+```
+
+From a delivery, the chain runs `dlv_.event_id` → `evt_.request_id` → the originating request. Useful for "which call triggered this webhook?"
+
+## Fields worth logging
+
+| Field | Why |
+| --- | --- |
+| `request_id` | Cross-trace identifier - log always |
+| `error.code` | Stable machine code - alert on it, not messages |
+| `status` | HTTP status |
+| `latency_ms` | Your client's measured round-trip |
+| `event.sequence` | Ordering within a project |
+
+## Metrics to watch
+
+- **API error rate by `code`** - `rate_limited` rising means you're over quota; `5xx` rising may be us (check [status](https://status.meridian.dev)).
+- **Webhook delivery success rate** - sustained failures pause endpoints after 24h; alert on `webhook.endpoint.disabled` events.
+- **Event lag** - time between a mutation and your handler processing it; spikes mean your receiver is behind.
+- **Retry-After compliance** - if your `429`s aren't followed by a quiet period, your backoff is wrong.
+
+## Dashboard views
+
+- **Request log** (dashboard → project → Logs): filter by request ID, status, endpoint, time.
+- **Deliveries**: per-endpoint success/failure with response bodies and retry state.
+- **Events**: the per-project feed, filterable by type and time window.
+
+## Debugging workflow
+
+<Steps>
+  <Step title="Find the request ID">
+    From your logs, the response header, or the error body - `req_…`.
+  </Step>
+  <Step title="Trace related records">
+    `GET /events?request_id=req_…` for effects it caused; `GET /webhooks/:id/deliveries` for downstream deliveries.
+  </Step>
+  <Step title="Escalate with the ID">
+    If the problem is ours, the `request_id` is what support needs - it maps directly to our internal trace.
+  </Step>
+</Steps>
+
+<Callout type="tip">
+  Pipe `webhook.endpoint.disabled` events into your on-call channel - it's the earliest signal that a receiver has gone dark, 24h before the endpoint pauses for good.
+</Callout>

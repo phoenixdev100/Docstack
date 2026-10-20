@@ -1,0 +1,222 @@
+---
+title: Build your first integration
+description: A complete walkthrough - create a project, register a webhook endpoint, trigger an event, and verify the signature.
+updatedAt: 2026-09-05
+---
+
+By the end of this guide you'll have a project that emits events and a local endpoint that receives and verifies them - the core loop of every Meridian integration.
+
+## Prerequisites
+
+- An API key for the `test` environment ([get one here](/docs/getting-started/quickstart#1-get-an-api-key))
+- `@meridian/sdk` installed, or `curl`
+- A local web server you can expose with a tunnel (ngrok shown below)
+
+## Step 1 - Create a project
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "first-integration", "region": "us-east"}'
+```
+
+```javascript title="JavaScript"
+import { Meridian } from "@meridian/sdk";
+
+const client = new Meridian(process.env.MERIDIAN_API_KEY);
+
+const project = await client.projects.create({
+  name: "first-integration",
+  region: "us-east",
+});
+// => prj_9kLm2xVb7nQe
+```
+
+```python title="Python"
+from meridian import Meridian
+import os
+
+client = Meridian(os.environ["MERIDIAN_API_KEY"])
+
+project = client.projects.create(
+    name="first-integration",
+    region="us-east",
+)
+# => prj_9kLm2xVb7nQe
+```
+
+</CodeTabs>
+
+Save the returned `id` - every subsequent call references it.
+
+## Step 2 - Stand up a receiver
+
+Webhook endpoints must be HTTPS in `live`, but `test` allows plain HTTP tunnels. Start a tiny server that logs incoming events:
+
+<CodeTabs>
+
+```javascript title="server.js" {11-13}
+import http from "node:http";
+import { verifyWebhookSignature } from "@meridian/sdk/webhooks";
+
+const SECRET = process.env.WEBHOOK_SECRET; // whsec_…
+
+http
+  .createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      const signature = req.headers["meridian-signature"];
+      const event = verifyWebhookSignature(body, signature, SECRET);
+      console.log("received:", event.type, event.data.id);
+      res.writeHead(200).end("ok");
+    });
+  })
+  .listen(3000);
+```
+
+```python title="server.py" {10-12}
+import os
+from flask import Flask, request
+from meridian.webhooks import verify_signature
+
+app = Flask(__name__)
+SECRET = os.environ["WEBHOOK_SECRET"]  # whsec_…
+
+@app.post("/webhooks")
+def receive():
+    event = verify_signature(
+        request.data, request.headers["Meridian-Signature"], SECRET
+    )
+    print("received:", event["type"], event["data"]["id"])
+    return "ok", 200
+
+app.run(port=3000)
+```
+
+</CodeTabs>
+
+<Callout type="tip">
+  Always verify signatures **before** parsing the payload - `verifyWebhookSignature` returns the parsed event only if the signature is valid, and throws otherwise.
+</Callout>
+
+## Step 3 - Expose it and register the endpoint
+
+```bash title="Terminal"
+ngrok http 3000
+# Forwarding  https://a1b2c3.ngrok.app -> http://localhost:3000
+```
+
+Register that URL as a webhook endpoint subscribed to the events you care about:
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/webhooks \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "prj_9kLm2xVb7nQe",
+    "url": "https://a1b2c3.ngrok.app/webhooks",
+    "events": ["project.updated", "sync.completed"]
+  }'
+```
+
+```javascript title="JavaScript"
+const endpoint = await client.webhooks.create({
+  projectId: "prj_9kLm2xVb7nQe",
+  url: "https://a1b2c3.ngrok.app/webhooks",
+  events: ["project.updated", "sync.completed"],
+});
+// endpoint.secret => whsec_… (shown once - store it)
+```
+
+```python title="Python"
+endpoint = client.webhooks.create(
+    project_id="prj_9kLm2xVb7nQe",
+    url="https://a1b2c3.ngrok.app/webhooks",
+    events=["project.updated", "sync.completed"],
+)
+# endpoint.secret => whsec_… (shown once - store it)
+```
+
+</CodeTabs>
+
+The response contains `secret` (`whsec_…`) - the signing secret for this endpoint. It's shown once; put it in `WEBHOOK_SECRET`.
+
+## Step 4 - Trigger an event
+
+Update the project to emit `project.updated`:
+
+```bash title="Terminal"
+curl -X PATCH https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "first-integration-v2"}'
+```
+
+Within a second or two your server should log:
+
+```text title="Terminal output"
+received: project.updated evt_3kR8mPx2vL
+```
+
+## Step 5 - Inspect the delivery
+
+Every delivery is recorded, including failures and retries:
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v2/webhooks/wh_2nQ8kLm4xP/deliveries?limit=5" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```json title="Response" {5}
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "dlv_9fH3kQm7xT",
+      "event_id": "evt_3kR8mPx2vL",
+      "status": "succeeded",
+      "response_status": 200,
+      "duration_ms": 182,
+      "attempts": 1,
+      "delivered_at": "2026-09-17T10:41:22Z"
+    }
+  ]
+}
+```
+
+<Callout type="note">
+  Failed deliveries retry with exponential backoff for up to 24 hours. See [Webhooks](/docs/guides/webhooks#retries) for the schedule and replay API.
+</Callout>
+
+## What you built
+
+<Flow
+  caption="The delivery path for a single event."
+  steps={[
+    { label: "Your app", title: "API call", detail: "POST /v2/projects - the mutation that fires the event" },
+    { label: "Meridian", title: "project.updated", detail: "event recorded with sequence 10492" },
+    { label: "Meridian", title: "Event bus", detail: "matches the event to your wh_ subscription", tone: "accent" },
+    { label: "Meridian → your server", title: "Delivery", code: "POST https://a1b2c3.ngrok.app/webhooks\nMeridian-Signature: t=…,v1=…" },
+    { label: "Your server", title: "Handler", detail: "verify signature → log → 200 OK", tone: "success" },
+  ]}
+/>
+
+## What's next
+
+<CardGrid>
+  <Card title="Webhooks" href="/docs/guides/webhooks" icon="webhook">
+    Retries, replay, ordering guarantees, and security hardening.
+  </Card>
+  <Card title="Error handling" href="/docs/guides/error-handling" icon="shield">
+    Idempotency keys, retries, and rate-limit strategy.
+  </Card>
+  <Card title="Production setup" href="/docs/guides/production-setup" icon="server">
+    The checklist for going live safely.
+  </Card>
+</CardGrid>

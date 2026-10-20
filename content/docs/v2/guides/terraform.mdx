@@ -1,0 +1,115 @@
+---
+title: Terraform & IaC
+description: Manage Meridian projects, API keys, and webhook endpoints as code with the official Terraform provider.
+updatedAt: 2026-08-25
+---
+
+The `meridian` Terraform provider manages projects, restricted keys, and webhook endpoints declaratively - infrastructure-as-code for platform resources.
+
+## Provider setup
+
+```hcl title="main.tf"
+terraform {
+  required_providers {
+    meridian = {
+      source  = "meridian/meridian"
+      version = "~> 1.0"
+    }
+  }
+}
+
+provider "meridian" {
+  # Reads MERIDIAN_API_KEY from the environment by default
+}
+```
+
+## Resources
+
+### meridian_project
+
+```hcl title="project.tf"
+resource "meridian_project" "billing" {
+  name        = "billing-sync"
+  region      = "us-east"
+  environment = "test"
+
+  metadata = {
+    team = "payments"
+    repo = "acme/billing"
+  }
+}
+
+output "project_id" {
+  value = meridian_project.billing.id   # prj_…
+}
+```
+
+### meridian_api_key (restricted)
+
+```hcl title="key.tf"
+resource "meridian_api_key" "ci" {
+  name        = "svc-ci"
+  environment = "test"
+  scopes      = ["projects:read", "events:read"]
+  expires_in_days = 90
+}
+
+output "key_secret" {
+  value     = meridian_api_key.ci.secret  # mrnd_test_… - shown once
+  sensitive = true
+}
+```
+
+<Callout type="important">
+  `secret` is returned once at creation. Terraform stores it in state marked `sensitive` - use a secrets backend for state (S3+KMS, Terraform Cloud) rather than local state.
+</Callout>
+
+### meridian_webhook_endpoint
+
+```hcl title="webhook.tf"
+resource "meridian_webhook_endpoint" "handler" {
+  project_id = meridian_project.billing.id
+  url        = "https://api.acme.io/webhooks/meridian"
+  events     = ["project.updated", "sync.completed"]
+  description = "billing webhook consumer"
+}
+
+output "webhook_secret" {
+  value     = meridian_webhook_endpoint.handler.secret  # whsec_… - shown once
+  sensitive = true
+}
+```
+
+## Full example
+
+A complete project + consumer wiring:
+
+```hcl title="stack.tf"
+resource "meridian_project" "app" {
+  name   = "app-backend"
+  region = "us-east"
+}
+
+resource "meridian_api_key" "backend" {
+  name   = "svc-backend"
+  scopes = ["projects:read", "events:read", "webhooks:write"]
+}
+
+resource "meridian_webhook_endpoint" "consumer" {
+  project_id = meridian_project.app.id
+  url        = var.webhook_url
+  events     = ["project.updated"]
+}
+```
+
+## State and drift
+
+- `terraform plan` detects drift - resources changed outside Terraform (dashboard, CLI) show as diffs.
+- Destroying a `meridian_project` **archives** it (soft delete) - restore within 30 days via the API or `terraform import` after restore.
+- Import existing resources: `terraform import meridian_project.app prj_9kLm2xVb7nQe`.
+
+## Practices
+
+- **Separate state per environment** - `test` and `live` in different workspaces/states; never let a plan mix them.
+- **Keys in CI** - let Terraform create restricted keys and export secrets to your secret store in the same apply.
+- **Rotate by replacement** - `terraform apply -replace=meridian_api_key.ci` rotates the key; consumers pick it up from the output.

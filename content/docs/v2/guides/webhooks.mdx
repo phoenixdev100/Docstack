@@ -1,0 +1,167 @@
+---
+title: Webhooks
+description: Endpoint registration, signature verification, retry schedule, replay, and production hardening for event delivery.
+updatedAt: 2026-09-03
+---
+
+Meridian pushes events to your HTTPS endpoints as they happen. This guide covers everything about receiving them reliably - for the receiving quickstart see [Build your first integration](/docs/guides/first-integration).
+
+## Delivery model
+
+When something happens inside a project, Meridian creates an **event** and fans it out to every subscribed endpoint:
+
+<Flow
+  caption="The lifecycle of every delivery."
+  steps={[
+    { label: "Meridian", title: "Event created", detail: "recorded in the project's event log" },
+    { label: "Meridian", title: "Matching endpoints", detail: "subscribed wh_ endpoints are fanned out to", tone: "accent" },
+    { label: "Delivery", title: "POST JSON payload", detail: "your endpoint must return a 2xx within 10 seconds",
+      outcomes: [
+        { label: "2xx", result: "delivered", tone: "success" },
+        { label: "non-2xx / timeout", result: "retry with backoff", tone: "warning" },
+        { label: "24h of failures", result: "endpoint paused", tone: "danger" },
+      ] },
+  ]}
+/>
+
+- Deliveries are **at-least-once** - your handler must be idempotent.
+- Ordering is **not guaranteed** - use `created_at` or the event's `sequence` to reorder if needed.
+- Payloads are `application/json` under 256 KB.
+
+## Event payload
+
+```json title="POST body" {2,6}
+{
+  "id": "evt_3kR8mPx2vL",
+  "object": "event",
+  "type": "project.updated",
+  "project_id": "prj_9kLm2xVb7nQe",
+  "environment": "test",
+  "created_at": "2026-09-17T10:41:19Z",
+  "sequence": 10492,
+  "data": {
+    "object": {
+      "id": "prj_9kLm2xVb7nQe",
+      "name": "first-integration-v2"
+    },
+    "previous_attributes": {
+      "name": "first-integration"
+    }
+  }
+}
+```
+
+`data.previous_attributes` shows what changed on `*.updated` events - use it to avoid reacting to no-op writes.
+
+## Verifying signatures
+
+Every request carries `Meridian-Signature: t=<unix>,v1=<hmac-sha256>` where `v1` is HMAC-SHA256 of `t + "." + rawBody` keyed by the endpoint secret (`whsec_…`).
+
+<CodeTabs>
+
+```javascript title="JavaScript"
+import { verifyWebhookSignature } from "@meridian/sdk/webhooks";
+
+const event = verifyWebhookSignature(
+  rawBody,                      // string or Buffer - do NOT parse first
+  req.headers["meridian-signature"],
+  process.env.WEBHOOK_SECRET
+);
+// throws SignatureVerificationError on mismatch or stale timestamp
+```
+
+```python title="Python"
+from meridian.webhooks import verify_signature
+
+event = verify_signature(
+    request.data,               # raw bytes - do NOT parse first
+    request.headers["Meridian-Signature"],
+    os.environ["WEBHOOK_SECRET"],
+)
+# raises SignatureVerificationError on mismatch or stale timestamp
+```
+
+```go title="Go"
+import "github.com/meridian/meridian-go/v2/webhook"
+
+event, err := webhook.Verify(
+    rawBody,                    // []byte - do NOT parse first
+    req.Header.Get("Meridian-Signature"),
+    os.Getenv("WEBHOOK_SECRET"),
+    webhook.DefaultTolerance,   // 5 minutes
+)
+```
+
+</CodeTabs>
+
+The verifier enforces a ±5 minute timestamp tolerance against replay attacks.
+
+<Callout type="important">
+  Verification needs the **raw request body**. Frameworks that pre-parse JSON (Express `body-parser`, some serverless adapters) must be configured to expose raw bytes on the webhook route.
+</Callout>
+
+## Respond fast, process async
+
+The 10-second timeout includes your whole handler. The safe pattern:
+
+```javascript title="Acknowledge first, process later"
+app.post("/webhooks", (req, res) => {
+  const event = verifyWebhookSignature(req.rawBody, sig, SECRET);
+
+  queue.push(event);            // hand off to a worker
+  res.status(200).end("ok");    // respond immediately
+});
+```
+
+If your handler does heavy work inline and times out, Meridian counts it as a failure and retries - leading to duplicate side effects.
+
+## Retries
+
+Failed deliveries (non-2xx or timeout) retry on this schedule:
+
+| Attempt | Delay |
+| --- | --- |
+| 1st retry | ~30 seconds |
+| 2nd | ~5 minutes |
+| 3rd | ~30 minutes |
+| 4th | ~2 hours |
+| 5th–8th | ~6 hours each |
+
+After 24 hours of consecutive failures the endpoint is **paused** and emits a `webhook.endpoint.disabled` event to your other endpoints and the dashboard. Paused endpoints resume on the next successful manual replay or via `PATCH /webhooks/:id` with `status: "active"`.
+
+## Replaying deliveries
+
+Replay any delivery from the last 30 days - new delivery ID, same event payload:
+
+```bash title="Replay a delivery"
+curl -X POST https://api.meridian.dev/v2/webhooks/wh_2nQ8kLm4xP/deliveries/dlv_9fH3kQm7xT/replay \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+Replays count as new deliveries: fresh signature timestamp, full retry schedule.
+
+## Handling duplicates
+
+At-least-once delivery + retries means you will occasionally see the same `evt_` twice. Deduplicate on event ID:
+
+```javascript title="Idempotent handler sketch"
+async function handle(event) {
+  const seen = await db.deliveries.find(event.id);
+  if (seen) return;                    // already processed
+
+  await db.deliveries.insert({ id: event.id, at: Date.now() });
+  await apply(event);                  // your business logic
+}
+```
+
+## Endpoint hygiene for production
+
+- **Use a dedicated path** (`/webhooks/meridian`) not shared with browser traffic.
+- **Don't auth-gate the path** - Meridian can't sign in; the signature *is* the auth.
+- **Allowlist method + size** - only `POST`, only JSON, cap at 1 MB.
+- **Monitor paused endpoints** - alert on `webhook.endpoint.disabled`.
+- **Rotate secrets** - `POST /webhooks/:id/rotate_secret` issues a new `whsec_` instantly; update your env var, old secret dies.
+
+<Callout type="tip">
+  In `test`, point an endpoint at a request inspector (webhook.site, ngrok's inspector at `localhost:4040`) to see exact payloads and headers while building.
+</Callout>
