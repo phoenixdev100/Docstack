@@ -1,0 +1,141 @@
+---
+title: Webhooks
+description: Webhook endpoint objects, subscriptions, deliveries, replay, and secret rotation.
+updatedAt: 2026-09-03
+---
+
+Webhook endpoints receive event POSTs. This resource manages the endpoints themselves - for payload format and signature verification see the [Webhooks guide](/docs/guides/webhooks).
+
+## The endpoint object
+
+```json title="webhook endpoint"
+{
+  "id": "wh_2nQ8kLm4xP",
+  "object": "webhook_endpoint",
+  "project_id": "prj_9kLm2xVb7nQe",
+  "url": "https://api.acme.io/webhooks/meridian",
+  "events": ["project.updated", "sync.completed"],
+  "status": "active",
+  "created_at": "2026-08-14T09:31:07Z",
+  "disabled_at": null
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `url` | HTTPS required in `live`; `test` allows HTTP tunnels |
+| `events` | Subscribed event types, or `["*"]` for all |
+| `status` | `active`, `paused` (auto-disabled by failures), or `disabled` |
+| `secret` | `whsec_…` signing secret - returned **once** at creation |
+
+## Create an endpoint
+
+<ApiEndpoint method="POST" path="/webhooks" />
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "project_id", type: "string", required: true, description: "Project that owns this endpoint." },
+    { name: "url", type: "string", required: true, description: "Delivery URL. HTTPS in live; tunnels allowed in test." },
+    { name: "events", type: "string[]", required: true, description: "Event types to subscribe, or [\"*\"]." },
+    { name: "description", type: "string", description: "Optional label for the dashboard." },
+  ]}
+/>
+
+```bash title="Terminal"
+curl -X POST https://api.meridian.dev/v2/webhooks \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "prj_9kLm2xVb7nQe",
+    "url": "https://api.acme.io/webhooks/meridian",
+    "events": ["project.updated", "sync.completed"]
+  }'
+```
+
+<ResponseExample
+  status={201}
+  code={`{
+  "id": "wh_2nQ8kLm4xP",
+  "object": "webhook_endpoint",
+  "project_id": "prj_9kLm2xVb7nQe",
+  "url": "https://api.acme.io/webhooks/meridian",
+  "events": ["project.updated", "sync.completed"],
+  "status": "active",
+  "secret": "whsec_8fK2mPx4vL9nQe3dR7wT1yH5",
+  "created_at": "2026-09-17T10:41:19Z"
+}`}
+/>
+
+<Callout type="important">
+  `secret` is shown once. Store it immediately - it verifies the `Meridian-Signature` header on every delivery.
+</Callout>
+
+## List endpoints
+
+<ApiEndpoint method="GET" path="/webhooks" />
+
+Accepts `project_id`, `status`, plus standard pagination (`limit`, `cursor`).
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v2/webhooks?project_id=prj_9kLm2xVb7nQe" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Deliveries
+
+<ApiEndpoint method="GET" path="/webhooks/:id/deliveries" />
+
+<ParamTable
+  label="Query parameters"
+  params={[
+    { name: "status", type: "string", description: "succeeded, failed, or pending." },
+    { name: "event_id", type: "string", description: "Filter to deliveries of one event." },
+    { name: "limit", type: "integer", description: "Items per page.", default: "25" },
+  ]}
+/>
+
+```json title="delivery object"
+{
+  "id": "dlv_9fH3kQm7xT",
+  "object": "delivery",
+  "event_id": "evt_3kR8mPx2vL",
+  "status": "failed",
+  "response_status": 500,
+  "duration_ms": 1204,
+  "attempts": 2,
+  "next_attempt_at": "2026-09-17T11:11:22Z",
+  "delivered_at": null
+}
+```
+
+## Replay a delivery
+
+<ApiEndpoint method="POST" path="/webhooks/:id/deliveries/:delivery_id/replay" />
+
+Re-sends the event payload as a new delivery (fresh signature timestamp). Available for 30 days after the original delivery.
+
+```bash title="Terminal"
+curl -X POST https://api.meridian.dev/v2/webhooks/wh_2nQ8kLm4xP/deliveries/dlv_9fH3kQm7xT/replay \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Rotate the secret
+
+<ApiEndpoint method="POST" path="/webhooks/:id/rotate_secret" />
+
+Immediately invalidates the old `whsec_` and returns a new one. Deploy the new secret to your handler before the next delivery lands - rotations take effect instantly.
+
+```bash title="Terminal"
+curl -X POST https://api.meridian.dev/v2/webhooks/wh_2nQ8kLm4xP/rotate_secret \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `400` | `parameter_invalid` | Non-HTTPS URL in `live`, or unknown event type |
+| `403` | `insufficient_scope` | Key lacks `webhooks:write` |
+| `404` | `resource_not_found` | No such endpoint/delivery in this environment |
+| `410` | `delivery_expired` | Replay requested after the 30-day window |
