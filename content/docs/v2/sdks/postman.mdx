@@ -1,0 +1,65 @@
+---
+title: Postman collection
+description: The maintained Meridian API collection for Postman and Bruno - every endpoint pre-configured with environments.
+updatedAt: 2026-08-15
+---
+
+A maintained request collection covering every endpoint - pre-built bodies, environment variables, and tests. Two ways to get it.
+
+## Option 1 - the maintained collection
+
+```bash title="Fetch the collection"
+curl -o meridian.postman.json https://api.meridian.dev/postman-collection.json
+```
+
+Import into Postman (File → Import) or Bruno (Open Collection). Includes:
+
+- Every public endpoint with example bodies
+- Pre-request scripts that stamp `Idempotency-Key` on `POST`s
+- Tests that assert `Meridian-Request-Id` is present
+- Two environments: **test** (`mrnd_test_`) and **live** (`mrnd_live_`)
+
+## Option 2 - generate from OpenAPI
+
+Import `openapi.yaml` directly (Postman supports OpenAPI 3.1 import) - same endpoints, you wire the auth yourself. See [OpenAPI spec](/docs/api/openapi).
+
+## Environments
+
+The collection expects two variables:
+
+| Variable | Value |
+| --- | --- |
+| `MERIDIAN_API_KEY` | `mrnd_test_…` or `mrnd_live_…` |
+| `BASE_URL` | `https://api.meridian.dev` (pre-filled) |
+
+Auth is a collection-level `Bearer {{MERIDIAN_API_KEY}}` - set it once at the root and every request inherits it.
+
+## What's wired in
+
+- **Idempotency**: `POST` requests auto-generate `Idempotency-Key: {{$guid}}` in pre-request scripts.
+- **Pagination**: list requests expose `limit`/`cursor` params; a `next_cursor` test script saves the cursor to a variable for the next call.
+- **Tracing**: tests extract `Meridian-Request-Id` into a variable for easy quoting.
+
+## Testing without code
+
+The collection is the fastest way to feel the API before writing a line of SDK code:
+
+<Steps>
+  <Step title="Import + pick the test environment">
+    Import the collection, select the `test` environment, paste your `mrnd_test_` key.
+  </Step>
+  <Step title="Run a create → list roundtrip">
+    `POST /projects` with the example body, then `GET /projects` - your new `prj_` should appear.
+  </Step>
+  <Step title="Simulate an event">
+    `POST /simulate/events` fires a test event - check `GET /events` to see it land.
+  </Step>
+</Steps>
+
+## Bruno
+
+Bruno opens the same collection file (it's plain JSON). The `.bru` native format is also maintained - `bruno import meridian.postman.json` converts it.
+
+<Callout type="note">
+  The collection is generated from the OpenAPI spec on every API release - if something's missing, the spec is the source of truth.
+</Callout>

@@ -1,0 +1,117 @@
+---
+title: Java SDK
+description: "meridian-java - the official Java/Kotlin client: Maven/Gradle setup, builders, CompletableFuture support, and webhook verification."
+updatedAt: 2026-09-08
+---
+
+The official Java client for Java 11+, available on Maven Central as `dev.meridian:meridian-java`. Immutable builders, `CompletableFuture` async variants, and a `WebhookSignature` verifier.
+
+## Installation
+
+<CodeTabs>
+
+```xml title="Maven"
+<dependency>
+  <groupId>dev.meridian</groupId>
+  <artifactId>meridian-java</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+```kotlin title="Gradle (Kotlin DSL)"
+implementation("dev.meridian:meridian-java:1.0.0")
+```
+
+```groovy title="Gradle (Groovy)"
+implementation 'dev.meridian:meridian-java:1.0.0'
+```
+
+</CodeTabs>
+
+## Initialization
+
+```java title="Client.java"
+import dev.meridian.MeridianClient;
+
+MeridianClient client = MeridianClient.builder()
+    .apiKey(System.getenv("MERIDIAN_API_KEY"))
+    .timeout(Duration.ofSeconds(30))
+    .maxRetries(3)
+    .build();
+```
+
+## Methods
+
+```java title="Projects.java"
+Project project = client.projects().create(
+    ProjectCreateParams.builder()
+        .name("billing-sync")
+        .region(Region.US_EAST)
+        .build()
+);
+
+Project fetched = client.projects().get(project.id());
+```
+
+| Method | Endpoint |
+| --- | --- |
+| `projects().create(params)` | `POST /projects` |
+| `projects().get(id)` | `GET /projects/:id` |
+| `projects().update(id, params)` | `PATCH /projects/:id` |
+| `projects().delete(id)` | `DELETE /projects/:id` |
+| `projects().list(params)` | `GET /projects` - `Stream<Project>` |
+| `webhooks().create / list / deliveries / replay` | `/webhooks*` |
+| `events().list / get` | `/events*` |
+
+## Async
+
+Every synchronous method has a `…Async` variant returning `CompletableFuture`:
+
+```java title="Async.java"
+client.projects()
+    .createAsync(params)
+    .thenAccept(project -> log.info("created {}", project.id()))
+    .exceptionally(err -> {
+        log.error("create failed", err);
+        return null;
+    });
+```
+
+## Webhook verification
+
+```java title="Webhook.java"
+import dev.meridian.webhook.WebhookSignature;
+
+Event event = WebhookSignature.verify(
+    rawBody,                            // String - do NOT deserialize first
+    request.getHeader("Meridian-Signature"),
+    System.getenv("WEBHOOK_SECRET")
+);
+```
+
+## Errors
+
+API failures throw `MeridianException` subclasses:
+
+| Exception | Status |
+| --- | --- |
+| `AuthenticationException` | 401 |
+| `PermissionException` | 403 |
+| `NotFoundException` | 404 |
+| `ConflictException` | 409 |
+| `RateLimitException` (`retryAfter()`) | 429 |
+| `ApiException` | 5xx |
+
+```java title="Errors.java"
+try {
+    client.projects().create(params);
+} catch (RateLimitException e) {
+    scheduleRetry(e.retryAfter());
+} catch (MeridianException e) {
+    log.error("{} {} (req {})", e.code(), e.getMessage(), e.requestId());
+}
+```
+
+<Callout type="tip">
+  Kotlin users get extension functions and named-argument-friendly builders - the same artifact works for both languages.
+</Callout>
