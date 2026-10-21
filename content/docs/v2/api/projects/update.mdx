@@ -1,0 +1,107 @@
+---
+title: Update a project
+description: PATCH /projects/:id - update name, metadata, or status. Emits project.updated with previous_attributes.
+updatedAt: 2026-09-08
+---
+
+<ApiEndpoint method="PATCH" path="/projects/:id" />
+
+Updates mutable fields of a project. Only provided fields change - `PATCH` never resets omitted values. Emits `project.updated`.
+
+## Parameters
+
+<ParamTable
+  label="Path parameters"
+  params={[
+    { name: "id", type: "string", required: true, description: "The prj_ identifier." },
+  ]}
+/>
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", description: "New display name - must stay unique in the workspace." },
+    { name: "status", type: "string", description: "active or suspended. Archived projects can't be patched." },
+    { name: "metadata", type: "object", description: "Replaces the entire metadata object - send the full map, not a diff." },
+  ]}
+/>
+
+<Callout type="warning">
+  `region` and `environment` are immutable - attempting to patch them returns `400 parameter_invalid`.
+</Callout>
+
+## Example request
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X PATCH https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "billing-sync-v2"}'
+```
+
+```javascript title="JavaScript"
+const project = await client.projects.update("prj_9kLm2xVb7nQe", {
+  name: "billing-sync-v2",
+});
+```
+
+```python title="Python"
+project = client.projects.update(
+    "prj_9kLm2xVb7nQe",
+    name="billing-sync-v2",
+)
+```
+
+```go title="Go"
+project, err := client.Projects.Update(ctx, "prj_9kLm2xVb7nQe", &meridian.ProjectUpdateParams{
+    Name: meridian.String("billing-sync-v2"),
+})
+```
+
+</CodeTabs>
+
+## Example response
+
+<ResponseExample
+  status={200}
+  code={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync-v2",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "metadata": {
+    "team": "payments",
+    "repo": "acme/billing"
+  },
+  "created_at": "2026-08-14T09:31:07Z",
+  "updated_at": "2026-09-17T10:41:19Z"
+}`}
+/>
+
+## The emitted event
+
+Subscribers to `project.updated` receive the changed fields in `data.previous_attributes`:
+
+```json title="project.updated" {5}
+{
+  "type": "project.updated",
+  "data": {
+    "object": { "id": "prj_9kLm2xVb7nQe", "name": "billing-sync-v2" },
+    "previous_attributes": { "name": "billing-sync" }
+  }
+}
+```
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `400` | `parameter_invalid` | Patching `region`/`environment`, or invalid `status` |
+| `403` | `insufficient_scope` | Key lacks `projects:write` |
+| `404` | `resource_not_found` | No such project in this environment |
+| `409` | `resource_conflict` | New `name` collides with another active project |
+| `410` | `resource_archived` | Project is archived - restore first |
