@@ -1,0 +1,73 @@
+---
+title: Get a project
+description: GET /projects/:id - fetch a single project by ID.
+updatedAt: 2026-09-08
+---
+
+<ApiEndpoint method="GET" path="/projects/:id" />
+
+Returns the project with the given ID, if it exists in the calling key's environment.
+
+## Parameters
+
+<ParamTable
+  label="Path parameters"
+  params={[
+    { name: "id", type: "string", required: true, description: "The prj_ identifier of the project." },
+  ]}
+/>
+
+## Example request
+
+<CodeTabs>
+
+```bash title="cURL"
+curl https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```javascript title="JavaScript"
+const project = await client.projects.get("prj_9kLm2xVb7nQe");
+```
+
+```python title="Python"
+project = client.projects.get("prj_9kLm2xVb7nQe")
+```
+
+```go title="Go"
+project, err := client.Projects.Get(ctx, "prj_9kLm2xVb7nQe")
+```
+
+</CodeTabs>
+
+## Example response
+
+<ResponseExample
+  status={200}
+  code={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "metadata": {
+    "team": "payments",
+    "repo": "acme/billing"
+  },
+  "created_at": "2026-08-14T09:31:07Z",
+  "updated_at": "2026-09-02T14:12:44Z"
+}`}
+/>
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `401` | `invalid_api_key` | Missing/revoked key |
+| `403` | `insufficient_scope` | Key lacks `projects:read` |
+| `404` | `resource_not_found` | No such project **in this environment** - check the key prefix |
+
+<Callout type="tip">
+  A `404` on an ID you can see in the dashboard almost always means the request ran in the wrong environment - `test` and `live` projects with the same name are different objects.
+</Callout>

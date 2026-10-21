@@ -1,0 +1,88 @@
+---
+title: Delete a project
+description: DELETE /projects/:id - soft-deletes (archives) a project. Restorable for 30 days.
+updatedAt: 2026-09-08
+---
+
+<ApiEndpoint method="DELETE" path="/projects/:id" />
+
+Archives a project. This is a **soft delete**: the project stops serving traffic immediately but its configuration is retained for 30 days, during which it can be restored. After 30 days all data is purged permanently.
+
+## Parameters
+
+<ParamTable
+  label="Path parameters"
+  params={[
+    { name: "id", type: "string", required: true, description: "The prj_ identifier." },
+  ]}
+/>
+
+## Example request
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X DELETE https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+```javascript title="JavaScript"
+const deleted = await client.projects.delete("prj_9kLm2xVb7nQe");
+// deleted.archivedAt - when the purge timer started
+```
+
+```python title="Python"
+deleted = client.projects.delete("prj_9kLm2xVb7nQe")
+```
+
+```go title="Go"
+deleted, err := client.Projects.Delete(ctx, "prj_9kLm2xVb7nQe")
+```
+
+</CodeTabs>
+
+## Example response
+
+<ResponseExample
+  status={200}
+  code={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "status": "archived",
+  "archived_at": "2026-09-17T10:41:19Z",
+  "purge_after": "2026-10-17T10:41:19Z",
+  "deleted": true
+}`}
+/>
+
+## What happens on archive
+
+- All API access to the project returns `404 resource_not_found`.
+- Webhook endpoints stop receiving deliveries immediately.
+- In-flight events are discarded - no deliveries queue after archival.
+- The project's `name` is freed for reuse by a new project.
+
+## Restoring
+
+Within the 30-day window:
+
+<ApiEndpoint method="POST" path="/projects/:id/restore" />
+
+```bash title="Restore an archived project"
+curl -X POST https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe/restore \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+Restoration reactivates the project but **does not** recreate webhook endpoints - those must be re-registered.
+
+<Callout type="important">
+  After `purge_after` the project, its events, endpoints, and configuration are permanently deleted and IDs are never reused. There is no recovery path.
+</Callout>
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `403` | `insufficient_scope` | Key lacks `projects:write` |
+| `404` | `resource_not_found` | No such project in this environment |
+| `410` | `resource_archived` | Already archived - response includes `purge_after` |

@@ -1,0 +1,60 @@
+---
+title: Projects
+description: The project object schema and all five operations - list, create, get, update, delete.
+updatedAt: 2026-09-08
+---
+
+Projects are the top-level container for integration work. All other resources - webhook endpoints, events, environments - belong to a project.
+
+## The project object
+
+```json title="project" {2}
+{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "created_at": "2026-08-14T09:31:07Z",
+  "updated_at": "2026-09-02T14:12:44Z"
+}
+```
+
+<ParamTable
+  label="Attributes"
+  params={[
+    { name: "id", type: "string", description: "Unique identifier, prj_ prefixed." },
+    { name: "name", type: "string", description: "Display name, unique per workspace." },
+    { name: "region", type: "string", description: "us-east, eu-west, or ap-south. Immutable." },
+    { name: "environment", type: "string", description: "test or live - mirrors the calling key's environment." },
+    { name: "status", type: "string", description: "active, suspended, or archived." },
+    { name: "created_at", type: "timestamp", description: "Creation time, RFC 3339." },
+    { name: "updated_at", type: "timestamp", description: "Last mutation time." },
+  ]}
+/>
+
+## Operations
+
+| Method | Path | Description |
+| --- | --- | --- |
+| <Badge>GET</Badge> | `/projects` | [List projects](/docs/api/projects/list) |
+| <Badge>POST</Badge> | `/projects` | [Create a project](/docs/api/projects/create) |
+| <Badge>GET</Badge> | `/projects/:id` | [Get a project](/docs/api/projects/get) |
+| <Badge>PATCH</Badge> | `/projects/:id` | [Update a project](/docs/api/projects/update) |
+| <Badge>DELETE</Badge> | `/projects/:id` | [Delete a project](/docs/api/projects/delete) |
+
+## Events
+
+Mutations emit events you can subscribe to via [webhooks](/docs/api/webhooks):
+
+| Type | Fired when |
+| --- | --- |
+| `project.created` | A project is created |
+| `project.updated` | `name` or `status` changes - includes `previous_attributes` |
+| `project.archived` | A project is soft-deleted |
+| `project.restored` | An archived project is restored |
+
+<Callout type="note">
+  Looking for member management? Project membership inherits workspace roles - see [Users](/docs/api/users) and [Permissions](/docs/concepts/permissions).
+</Callout>

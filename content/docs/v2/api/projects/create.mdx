@@ -1,0 +1,122 @@
+---
+title: Create a project
+description: POST /projects - create a project in a region. Returns the project object; emits project.created.
+updatedAt: 2026-09-08
+---
+
+<ApiEndpoint method="POST" path="/projects" />
+
+Creates a project in the calling key's environment. Emits a `project.created` event.
+
+## Parameters
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", required: true, description: "Display name - unique within the workspace, 1–64 chars." },
+    { name: "region", type: "string", required: true, description: "Data region: us-east, eu-west, or ap-south. Immutable after creation." },
+    { name: "metadata", type: "object", description: "Arbitrary key/value pairs (max 20 keys, 500 chars per value) for your own bookkeeping." },
+  ]}
+/>
+
+<ParamTable
+  label="Headers"
+  params={[
+    { name: "Authorization", type: "string", required: true, description: "Bearer mrnd_ key." },
+    { name: "Idempotency-Key", type: "string", description: "Replay key - same key within 24h returns the original response." },
+  ]}
+/>
+
+## Example request
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/projects \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Idempotency-Key: provision-acme-001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "billing-sync",
+    "region": "us-east",
+    "metadata": {"team": "payments", "repo": "acme/billing"}
+  }'
+```
+
+```javascript title="JavaScript"
+const project = await client.projects.create({
+  name: "billing-sync",
+  region: "us-east",
+  metadata: { team: "payments", repo: "acme/billing" },
+});
+```
+
+```python title="Python"
+project = client.projects.create(
+    name="billing-sync",
+    region="us-east",
+    metadata={"team": "payments", "repo": "acme/billing"},
+)
+```
+
+```go title="Go"
+project, err := client.Projects.Create(ctx, &meridian.ProjectCreateParams{
+    Name:   "billing-sync",
+    Region: "us-east",
+})
+```
+
+</CodeTabs>
+
+## Example response
+
+<ResponseExample
+  status={201}
+  code={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "metadata": {
+    "team": "payments",
+    "repo": "acme/billing"
+  },
+  "created_at": "2026-09-17T10:41:19Z",
+  "updated_at": "2026-09-17T10:41:19Z"
+}`}
+/>
+
+## Try it
+
+Send the request with the interactive console. The response below is a **mock example** - no live API call is made.
+
+<TryIt
+  method="POST"
+  path="/v2/projects"
+  exampleStatus={201}
+  exampleBody={`{
+  "id": "prj_9kLm2xVb7nQe",
+  "object": "project",
+  "name": "billing-sync",
+  "region": "us-east",
+  "environment": "test",
+  "status": "active",
+  "created_at": "2026-09-17T10:41:19Z",
+  "updated_at": "2026-09-17T10:41:19Z"
+}`}
+/>
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `400` | `parameter_missing` | `name` or `region` absent |
+| `400` | `parameter_invalid` | Invalid `region` value, or `metadata` over limits |
+| `403` | `insufficient_scope` | Key lacks `projects:write` |
+| `409` | `resource_conflict` | `name` already used by an active project in this workspace |
+
+<Callout type="note" title="Choosing a region">
+  Region cannot be changed after creation - see [Projects → Choosing a region](/docs/concepts/projects#choosing-a-region) for the trade-offs.
+</Callout>
