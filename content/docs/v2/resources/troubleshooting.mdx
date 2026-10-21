@@ -1,0 +1,118 @@
+---
+title: Troubleshooting
+description: Symptom → cause → fix for the issues we see most - auth failures, webhook delivery problems, pagination bugs, and SDK errors.
+updatedAt: 2026-09-13
+---
+
+The problems that actually come up, and how to unstick them. If yours isn't here, [support](/docs/resources/support) with a `request_id` is the next step.
+
+## Authentication
+
+<Accordion>
+  <AccordionItem title="401 on a key that 'definitely works'">
+    **Cause**: wrong environment (test key against a live resource, or the reverse), or whitespace/quote contamination in the header.
+
+    **Fix**: check the key's prefix (`mrnd_test_` vs `mrnd_live_`) matches the resources you're touching. `echo "Bearer $KEY" | od -c` - look for stray spaces/newlines.
+  </AccordionItem>
+
+  <AccordionItem title="403 insufficient_scope on a restricted key">
+    **Cause**: the key's scopes don't cover `resource:action` for what you're calling (e.g., `projects:read` won't list events).
+
+    **Fix**: `GET /keys/:id` shows the scopes. Either broaden them or use a less restricted key - see [Authentication](/docs/api/authentication).
+  </AccordionItem>
+
+  <AccordionItem title="403 ip_not_allowed">
+    **Cause**: the key has an IP allowlist and your egress IP isn't on it.
+
+    **Fix**: `GET /v2/me` returns your apparent IP - add it (or its CIDR) to `allowed_ips`. If your egress is dynamic (serverless), allowlisting won't work - see [IP allowlisting](/docs/security/ip-allowlisting).
+  </AccordionItem>
+</Accordion>
+
+## Webhooks
+
+<Accordion>
+  <AccordionItem title="Signature verification fails">
+    **Cause** (90% of cases): verifying the *parsed* body, not the raw bytes. JSON re-serialization changes whitespace/key order → HMAC mismatch.
+
+    **Fix**: capture the raw body *before* any JSON parsing (Express needs `express.raw()`, not `.json()`). Then verify `Meridian-Signature` over `timestamp.body` - see [Webhooks](/docs/guides/webhooks#verifying-signatures).
+  </AccordionItem>
+
+  <AccordionItem title="Deliveries stopped arriving">
+    **Cause**: your endpoint got paused - 24h of consecutive failures triggers `webhook.endpoint.disabled` and halts deliveries.
+
+    **Fix**: check the delivery log for the failure pattern, fix the handler, then re-enable: `PATCH /webhooks/:id { "disabled": false }`.
+  </AccordionItem>
+
+  <AccordionItem title="Getting duplicates">
+    **Cause**: that's by design - delivery is at-least-once. Retries resend the same `dlv_` ID.
+
+    **Fix**: dedupe by `id` in your handler (store processed IDs briefly). It's a feature - it means you'll never *lose* a delivery.
+  </AccordionItem>
+
+  <AccordionItem title="Local tunnel receives nothing">
+    **Cause**: the tunnel URL changed (free ngrok/cloudflare tunnels rotate), or the endpoint still points at the old one.
+
+    **Fix**: `meridian listen` keeps a stable address while running, or re-register the fresh tunnel URL on the endpoint.
+  </AccordionItem>
+</Accordion>
+
+## API behavior
+
+<Accordion>
+  <AccordionItem title="List returns fewer items than exist">
+    **Cause**: you're reading `data` on page one without following `next_cursor` - the API paginates at `limit` (default 25).
+
+    **Fix**: loop until `next_cursor` is null - see [API overview](/docs/api#pagination). SDK `autoPagingEach` does it for you.
+  </AccordionItem>
+
+  <AccordionItem title="409 idempotency_conflict">
+    **Cause**: you reused an `Idempotency-Key` with a *different* body - keys bind to their first payload.
+
+    **Fix**: generate a new key per logical operation. If you want to dedupe across retries, derive the key from your internal operation ID, not the request.
+  </AccordionItem>
+
+  <AccordionItem title="PATCH didn't update my field">
+    **Cause**: sending `null` where you meant `0`/`""`/`[]` - `null` clears a field; falsy values set it.
+
+    **Fix**: `PATCH` semantics: `null` = unset, omitted = unchanged, value = set. Check you're sending the right one.
+  </AccordionItem>
+
+  <AccordionItem title="410 Gone on a path that used to work">
+    **Cause**: you hit a retired (post-sunset) endpoint or version.
+
+    **Fix**: the response `Link` header points at migration docs - or you're still on v1, see [Migrate v1 → v2](/docs/guides/migrate-v1-v2).
+  </AccordionItem>
+</Accordion>
+
+## SDKs
+
+<Accordion>
+  <AccordionItem title="'Unauthorized' from the SDK but curl works">
+    **Cause**: the SDK reads `MERIDIAN_API_KEY` when no key is passed - the env var isn't set where the code runs.
+
+    **Fix**: pass the key explicitly (`new Meridian(key)`) or set the env var in the actual runtime (CI secrets, container env - not just your shell).
+  </AccordionItem>
+
+  <AccordionItem title="autoPaging never terminates">
+    **Cause**: mutating the collection while iterating (creating resources inside the loop) - new items shift the cursor.
+
+    **Fix**: collect IDs first, then mutate; or paginate on a snapshot `created_before` filter.
+  </AccordionItem>
+
+  <AccordionItem title="Type errors on response fields">
+    **Cause**: SDK version older than the API - new fields break old codegen types.
+
+    **Fix**: upgrade the SDK major matching your API version. The types follow the spec - see [Versioning](/docs/getting-started/versioning).
+  </AccordionItem>
+</Accordion>
+
+## Still stuck?
+
+Get support with these - they're what we'll ask for anyway:
+
+- `Meridian-Request-Id` from the failing response
+- The `error.code` (not just the message)
+- Whether it's `test` or `live`
+- What you expected vs what happened
+
+[Support channels →](/docs/resources/support)

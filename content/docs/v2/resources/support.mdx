@@ -1,0 +1,74 @@
+---
+title: Support
+description: How to get help - channels, SLAs, what to include in a report, and the fastest path to an answer.
+updatedAt: 2026-09-14
+---
+
+## Channels
+
+| Channel | Best for | Plan |
+| --- | --- | --- |
+| **Docs + search** | Most questions - you're here | Everyone |
+| **Email** - support@meridian.dev | Bugs, account issues, how-does-X-work | Everyone |
+| **In-dashboard chat** | Quick questions while you're working | All paid plans |
+| **Priority support** | Production-impacting issues | Team & Enterprise |
+| **Dedicated Slack channel** | Enterprise accounts - shared channel with our engineers | Enterprise |
+| **security@meridian.dev** | Vulnerabilities, key compromise | Everyone - always |
+
+## Response targets
+
+| Severity | First response | Plan |
+| --- | --- | --- |
+| Critical - production down | < 1 hour | Enterprise; < 4h Team |
+| Major - feature unusable, workaround exists | < 4 hours | Paid plans |
+| Standard - questions, minor bugs | < 1 business day | Paid plans |
+| Community tier | Best effort | Free |
+
+Critical = your production system can't function. Please mark it accurately - crying wolf on a critical gets triaged, not skipped.
+
+## Security issues - always
+
+- **Key leaked?** Revoke it *first* (`DELETE /keys/:id` or dashboard), then email - rotation takes seconds, forensics can wait.
+- **Vulnerability?** security@meridian.dev - see [Responsible disclosure](/docs/security/overview#responsible-disclosure). Don't post publicly first.
+
+## What to include
+
+Reports resolve fastest with:
+
+- **`Meridian-Request-Id`** - the single most useful artifact; it's our trace ID
+- `error.code` (not just the message)
+- Environment: `test` or `live`
+- SDK + version (if applicable) - `meridian --version`, package.json, etc.
+- Expected vs actual behavior, minimal repro if you have one
+
+<Callout type="tip">
+  A report with a `request_id` usually gets a real answer in the first reply - we can pull the exact request path instead of guessing from a description.
+</Callout>
+
+## Status and incidents
+
+- **[status.meridian.dev](https://status.meridian.dev)** - real-time component status + incident history
+- Subscribe to updates (email/webhook) - don't email support during a visible incident; we're on it
+- Postmortems are published for SEV-1/SEV-2 incidents
+
+## Self-serve first
+
+Most questions land in one of these:
+
+- [Troubleshooting](/docs/resources/troubleshooting) - symptom → fix
+- [Known issues](/docs/resources/known-issues) - tracked bugs + workarounds
+- [FAQ](/docs/resources/faq) - common platform questions
+- [Glossary](/docs/getting-started/glossary) - terminology
+- [Changelog](/docs/changelog) - what changed recently
+
+## Feature requests
+
+We take them seriously - the backlog is shaped by reports:
+
+- Describe the *problem*, not the solution - "I need to X because Y" beats "add a Z flag"
+- Include your use case - scale, constraints, what you've tried
+- Votes matter - if it's already requested, +1 it rather than filing a duplicate
+
+## Escalation
+
+If a response isn't working: reply asking for escalation, or (Enterprise) ping your account manager. Include the thread history - you shouldn't have to re-explain.

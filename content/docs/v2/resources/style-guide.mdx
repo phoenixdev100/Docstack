@@ -1,0 +1,204 @@
+---
+title: Style guide
+description: Every content component available in Meridian docs - the authoring reference for the documentation team.
+updatedAt: 2026-09-17
+---
+
+This page documents every component available in `.mdx` files. It's the authoring reference - if a kind of information needs a home, one of these patterns fits it.
+
+## Callouts
+
+<Callout type="note">Neutral context - no action required.</Callout>
+<Callout type="tip">A recommendation that makes the reader's life easier.</Callout>
+<Callout type="warning">Something that can silently go wrong.</Callout>
+<Callout type="important">Something that *will* break if ignored.</Callout>
+
+## Steps
+
+Use `<Steps>`/`<Step>` for sequential tutorials - numbering is automatic.
+
+<Steps>
+  <Step title="Create a project">
+    `POST /projects` with a name and region. The response gives you a `prj_` ID.
+  </Step>
+  <Step title="Register a webhook endpoint">
+    Point an `https://` URL at your handler and subscribe to `project.updated`.
+  </Step>
+  <Step title="Verify the signature">
+    HMAC-SHA256 over `timestamp.body` - see the [webhooks guide](/docs/guides/webhooks).
+  </Step>
+</Steps>
+
+## Flow diagrams
+
+For process/lifecycle visuals - vertical steppers or horizontal pipelines.
+
+<Flow
+  steps={[
+    { label: "Your app", title: "Request", detail: "POST /v2/projects" },
+    { label: "Meridian", title: "Edge", detail: "auth + rate limit", tone: "accent" },
+    { label: "Meridian", title: "Handler", detail: "returns JSON",
+      outcomes: [
+        { label: "2xx", result: "success", tone: "success" },
+        { label: "429", result: "rate limited", tone: "warning" },
+      ] },
+  ]}
+/>
+
+Horizontal variant: `<Flow direction="horizontal" steps={[...]} />`.
+
+## File trees
+
+<FileTree
+  items={[
+    { name: "app", children: [
+      { name: "layout.tsx", note: "root shell" },
+      { name: "docs", children: [
+        { name: "[...slug]", children: [{ name: "page.tsx", highlight: true }] },
+      ]},
+    ]},
+    { name: "content", children: [{ name: "docs", note: "all MDX lives here" }] },
+    { name: "lib", children: [{ name: "navigation.ts", note: "single nav source" }] },
+  ]}
+/>
+
+## Code
+
+Fences become `CodeBlock` automatically. Options: `title="file.ts"`, `{1,3-5}` highlights, `lineNumbers`.
+
+```typescript title="client.ts" {3} lineNumbers
+import { Meridian } from "@meridian/sdk";
+
+const client = new Meridian(process.env.MERIDIAN_API_KEY);
+```
+
+Multi-language via `<CodeTabs>` - write consecutive fenced blocks inside.
+
+## Tabs
+
+<Tabs>
+  <Tab title="npm">
+    `npm install @meridian/sdk`
+  </Tab>
+  <Tab title="pnpm">
+    `pnpm add @meridian/sdk`
+  </Tab>
+</Tabs>
+
+## Accordion / FAQ
+
+<Accordion>
+  <AccordionItem title="Can items nest?">
+    Yes - each `<AccordionItem>` takes any markdown, including code.
+  </AccordionItem>
+  <AccordionItem title="Is it animated?">
+    Subtle open/close, respects reduced-motion.
+  </AccordionItem>
+</Accordion>
+
+## Parameter tables
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", required: true, description: "Display name." },
+    { name: "region", type: "string", description: "us-east, eu-west, ap-south.", default: "us-east" },
+    { name: "legacy_id", type: "string", deprecated: true, description: "Use `metadata.legacy_id` instead." },
+  ]}
+/>
+
+## API endpoints
+
+<ApiEndpoint method="POST" path="/projects" />
+
+Inline method badges: `GET` <MethodBadge method="GET" />, `POST` <MethodBadge method="POST" />, `PATCH` <MethodBadge method="PATCH" />, `DELETE` <MethodBadge method="DELETE" />.
+
+## Response examples
+
+<ResponseExample
+  status={201}
+  code={`{ "id": "prj_9kLm2xVb7nQe", "object": "project" }`}
+/>
+
+## Try it
+
+Interactive request console - clearly labeled mock responses until a sandbox is wired.
+
+<TryIt
+  method="POST"
+  path="/v2/projects"
+  exampleStatus={201}
+  exampleBody={`{ "id": "prj_9kLm2xVb7nQe", "object": "project" }`}
+/>
+
+## Checklists
+
+Interactive, persisted - for launch/production checklists.
+
+<Checklist id="style-guide-demo" items={[
+  "Read the quickstart",
+  "Create a test project",
+  "Register a webhook endpoint",
+  "Verify a signature",
+]} />
+
+## Cards and links
+
+<CardGrid>
+  <Card title="API Reference" href="/docs/api" icon="code">
+    Every endpoint, typed.
+  </Card>
+  <Card title="SDKs" href="/docs/sdks/javascript" icon="box">
+    Five official client libraries.
+  </Card>
+</CardGrid>
+
+<RelatedLinks links={[
+  { title: "Error handling", href: "/docs/guides/error-handling" },
+  { title: "Production setup", href: "/docs/guides/production-setup" },
+]} />
+
+## Columns
+
+<Columns cols={2}>
+  <Column>
+    **Left column** - text, lists, code, anything markdown allows.
+  </Column>
+  <Column>
+    **Right column** - side-by-side comparisons or media.
+  </Column>
+</Columns>
+
+## Inline elements
+
+- Keyboard keys: <Kbd>Ctrl</Kbd> + <Kbd>K</Kbd> - `<Kbd>`
+- Icons: <Icon name="zap" /> <Icon name="key" /> <Icon name="server" /> - `<Icon name="…"/>` (any Lucide name)
+- Badges: <Badge>v2.4</Badge> <Badge variant="success">GA</Badge> <Badge variant="warning">Beta</Badge> <Badge variant="danger">Deprecated</Badge>
+- Abbreviations: <abbr title="Command Line Interface">CLI</abbr> renders with a dotted underline
+- Footnotes work via `[^1]` - GFM native
+- External links get a ↗ automatically
+
+## Figures
+
+<Figure caption="A captioned figure - drop any img/diagram/embed inside.">
+  <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='160'%3E%3Crect width='800' height='160' fill='%232563eb' opacity='0.08'/%3E%3Ctext x='400' y='84' font-family='monospace' font-size='14' fill='%23666' text-anchor='middle'%3Ediagram placeholder%3C/text%3E%3C/svg%3E" alt="Placeholder diagram" />
+</Figure>
+
+## Frontmatter status flags
+
+Pages support `badge: "Beta"` and `deprecated: true` in frontmatter - the badge renders next to the title and deprecated pages get an automatic warning banner. Individual params take `deprecated: true` in `ParamTable`.
+
+<details>
+<summary>Raw frontmatter example</summary>
+
+```yaml
+---
+title: Legacy endpoints
+description: v1 compatibility surface.
+badge: Deprecated
+deprecated: true
+updatedAt: 2026-04-01
+---
+```
+
+</details>
