@@ -1,0 +1,76 @@
+---
+title: Response headers
+description: Every HTTP header Meridian returns - request tracing, rate limits, idempotency, and deprecation signals.
+updatedAt: 2026-09-07
+---
+
+Response headers carry operational metadata - IDs for tracing, budget signals, and deprecation warnings. Log the ones that matter.
+
+## Reference
+
+| Header | On | Purpose |
+| --- | --- | --- |
+| `Meridian-Request-Id` | Every response | Unique `req_` trace ID - quote to support |
+| `X-RateLimit-Limit` | Every response | Requests allowed per window |
+| `X-RateLimit-Remaining` | Every response | Requests left this window |
+| `X-RateLimit-Reset` | Every response | Unix timestamp the oldest slot frees |
+| `Retry-After` | `429`, `503` | Seconds to wait before retrying |
+| `Idempotent-Replay` | Replayed `POST` | `true` - this is the stored response, not a fresh execution |
+| `Deprecation` | Deprecated endpoints | `true` - endpoint has an announced EOL |
+| `Sunset` | Deprecated endpoints | HTTP-date when the endpoint retires |
+| `Link` | Deprecated endpoints | Pointer to migration docs (`rel="deprecation"`) |
+| `Content-Type` | Every response | Always `application/json; charset=utf-8` |
+| `ETag` | `GET` responses | Entity tag - send `If-None-Match` to get `304`s and save bandwidth |
+
+## Tracing
+
+```http title="Trace every call"
+Meridian-Request-Id: req_8fK2mPx4vL
+```
+
+Log this on every request - successes for your audit trail, errors for support. It maps to our internal trace; without it we're searching logs by time and endpoint.
+
+## Idempotency signals
+
+```http title="A replayed response"
+HTTP/1.1 201 Created
+Idempotent-Replay: true
+Meridian-Request-Id: req_9xL2mPq4vK8n
+```
+
+`Idempotent-Replay: true` means the original request already ran - this response is the stored result. See [Idempotent requests](/docs/guides/idempotency).
+
+## Deprecation signals
+
+Deprecated endpoints tell you they're dying:
+
+```http title="Deprecation headers"
+Deprecation: true
+Sunset: Sat, 31 Mar 2027 23:59:59 GMT
+Link: <https://docs.meridian.dev/docs/guides/migrate-v1-v2>; rel="deprecation"
+```
+
+If your integration monitors for `Deprecation`, you'll never be surprised by a sunset - see [Versioning policy](/docs/getting-started/versioning).
+
+## Conditional requests
+
+`GET` responses carry `ETag`. Send `If-None-Match` to skip re-fetching unchanged resources:
+
+```bash title="304 instead of a full payload"
+curl https://api.meridian.dev/v2/projects/prj_9kLm2xVb7nQe \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H 'If-None-Match: "prj_9kLm2xVb7nQe:1726570041"'
+# → HTTP/1.1 304 Not Modified (empty body, no quota-heavy read)
+```
+
+List responses also `ETag` - cheap change-detection for polling loops (though [webhooks](/docs/guides/webhooks) are usually the better answer).
+
+## Headers you send
+
+| Header | Purpose |
+| --- | --- |
+| `Authorization: Bearer <key>` | Required on every request |
+| `Idempotency-Key` | On `POST` - deduplicates retries |
+| `Content-Type: application/json` | On requests with bodies |
+| `If-None-Match` | Conditional GETs |
+| `X-Load-Test` | Marks load-test traffic (see [Load testing](/docs/guides/load-testing)) |

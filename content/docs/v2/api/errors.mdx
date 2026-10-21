@@ -1,0 +1,117 @@
+---
+title: Errors
+description: The complete error code catalog - types, codes, HTTP statuses, and remediation for each failure class.
+updatedAt: 2026-09-04
+---
+
+Every non-2xx response returns a structured error object. This page is the full catalog - for retry strategy see [Error handling](/docs/guides/error-handling).
+
+## Error object
+
+```json title="Error shape"
+{
+  "error": {
+    "type": "invalid_request",
+    "code": "parameter_missing",
+    "message": "Missing required parameter: name.",
+    "param": "name",
+    "request_id": "req_8fK2mPx4vL",
+    "docs_url": "https://docs.meridian.dev/docs/api/errors#parameter_missing"
+  }
+}
+```
+
+| Field | Contract |
+| --- | --- |
+| `type` | Coarse class - stable |
+| `code` | Machine code - stable, safe to branch on |
+| `message` | Human-readable - may be reworded, don't parse |
+| `param` | Offending parameter (validation errors) |
+| `request_id` | Trace ID; also in `Meridian-Request-Id` header |
+
+## Error types
+
+| Type | Status range | Meaning |
+| --- | --- | --- |
+| `authentication` | 401 | Key missing, malformed, revoked, expired |
+| `permission` | 403 | Scope, environment, or IP restriction |
+| `invalid_request` | 400, 422 | Malformed params or body |
+| `not_found` | 404, 410 | Resource absent (or wrong environment) |
+| `conflict` | 409 | State conflict - duplicates, immutable fields |
+| `rate_limit` | 429 | Over quota - see `Retry-After` |
+| `api_error` | 500, 502, 503 | Platform-side failure - safe to retry |
+
+## Code catalog
+
+### Authentication (401)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `missing_api_key` | No `Authorization` header | Send `Bearer <key>` |
+| `invalid_api_key` | Malformed/revoked/expired key | Verify value, check revocation, rotate |
+
+### Permission (403)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `insufficient_scope` | Restricted key lacks the scope | Add `resource:action` scope |
+| `environment_mismatch` | Key env ≠ resource env | Use a key for the right environment |
+| `ip_not_allowed` | Source IP outside allowlist | Adjust CIDR list or egress IP |
+
+### Invalid request (400/422)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `parameter_missing` | Required field absent | Send the `param` field |
+| `parameter_invalid` | Field failed validation | Check `param` + expected format |
+| `parameter_unknown` | Unrecognized field | Remove the field - strict schema |
+| `body_invalid` | Unparseable JSON body | Validate JSON before sending |
+| `immutable_field` | Patching a read-only field | Drop `region`/`environment`/`id` |
+
+### Not found (404/410)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `resource_not_found` | ID doesn't exist here | Check ID + environment |
+| `resource_archived` | Soft-deleted resource | Restore within 30 days |
+| `delivery_expired` | Replay window passed | Deliveries replayable 30 days |
+
+### Conflict (409)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `resource_conflict` | Unique constraint hit | e.g. reuse a different `name` |
+| `idempotency_conflict` | Same key, different body | Reuse the exact original payload |
+
+### Rate limit (429)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `rate_limited` | Over per-key quota | Honor `Retry-After`, pace writes |
+
+### API error (5xx)
+
+| Code | Meaning | Fix |
+| --- | --- | --- |
+| `internal_error` | Unhandled platform fault | Retry with backoff; report if persistent |
+| `upstream_timeout` | Internal dependency timed out | Retry - usually transient |
+| `service_unavailable` | Maintenance/overload | Retry; check status page if sustained |
+
+## idempotency_conflict
+
+A special case worth calling out: if you reuse an `Idempotency-Key` with a **different request body**, you get `409 idempotency_conflict` - the key is bound to its original payload.
+
+```json title="idempotency_conflict"
+{
+  "error": {
+    "type": "conflict",
+    "code": "idempotency_conflict",
+    "message": "This idempotency key was already used with a different request body.",
+    "request_id": "req_2hF8kLm4xQ"
+  }
+}
+```
+
+<Callout type="warning">
+  Persistent `5xx` responses indicate a platform incident - check [status.meridian.dev](https://status.meridian.dev) and include `request_id` values in any support report.
+</Callout>

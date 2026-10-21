@@ -1,0 +1,65 @@
+---
+title: OpenAPI spec
+description: The machine-readable OpenAPI 3.1 description of the Meridian API - for codegen, docs tools, and request validation.
+updatedAt: 2026-08-18
+---
+
+The full API is described by an OpenAPI 3.1 spec - the single source of truth the docs and SDKs are generated from.
+
+## Get it
+
+```bash title="Download the spec"
+curl -o openapi.yaml https://api.meridian.dev/openapi.yaml
+# or JSON
+curl -o openapi.json https://api.meridian.dev/openapi.json
+```
+
+The spec is versioned with the API - `/v1` has its own (`/v1/openapi.yaml`).
+
+## What you can do with it
+
+### Generate a client
+
+```bash title="openapi-generator"
+openapi-generator generate -i openapi.yaml -g typescript-fetch -o generated/meridian
+```
+
+```bash title="oapi-codegen (Go)"
+oapi-codegen -package meridian openapi.yaml > meridian.gen.go
+```
+
+Generated clients are fine for exploration - the official SDKs add idempotency handling, retry policy, and pagination helpers that raw codegen misses.
+
+### Import into Postman/Bruno/Insomnia
+
+Import `openapi.yaml` directly - every endpoint arrives with params, auth, and example bodies. See [Postman collection](/docs/sdks/postman) for the maintained collection (spec + pre-configured environments).
+
+### Validate requests/responses
+
+Assert responses against the schema in contract tests:
+
+```typescript title="Contract test (jest + openapi-schema-validator)"
+import Validator from "openapi-schema-validator";
+const v = new Validator(openapiSpec);
+const res = await client.projects.get("prj_9kLm2xVb7nQe");
+expect(v.validateResponse(res, "get", "/projects/{id}", 200).errors).toEqual([]);
+```
+
+### Mock a server
+
+```bash title="Run a local mock from the spec"
+prism mock openapi.yaml -p 4010
+# → local mock serving spec-compliant responses at localhost:4010
+```
+
+Useful for offline dev or testing error handling against spec-shaped responses without hitting `test`.
+
+## Coverage notes
+
+- All public endpoints, params, request/response schemas, and error shapes are in the spec.
+- Webhook *payloads* are documented in the `x-webhooks` extension (and the [Events page](/docs/api/events)).
+- Examples in the spec are real `test` values - `prism mock` returns them verbatim.
+
+## Versioning
+
+The spec follows semver alongside the API. `info.version` reports the spec release; additive changes bump minor, schema-breaking changes only ship with a major API version (see [Versioning policy](/docs/getting-started/versioning)).

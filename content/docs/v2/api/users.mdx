@@ -1,0 +1,121 @@
+---
+title: Users
+description: The user object and endpoints - list workspace members, get a user, manage service accounts.
+updatedAt: 2026-08-28
+---
+
+Users are workspace members - humans and service accounts. Membership and roles are managed in the dashboard; the API exposes read access plus service-account lifecycle for automation.
+
+## The user object
+
+```json title="user"
+{
+  "id": "usr_4hF8kQm7xT",
+  "object": "user",
+  "name": "Priya Nair",
+  "email": "priya@acme.io",
+  "kind": "member",
+  "roles": {
+    "test": "developer",
+    "live": "viewer"
+  },
+  "created_at": "2026-06-02T08:15:44Z",
+  "last_active_at": "2026-09-16T19:03:12Z"
+}
+```
+
+<ParamTable
+  label="Attributes"
+  params={[
+    { name: "id", type: "string", description: "Unique identifier, usr_ prefixed." },
+    { name: "kind", type: "string", description: "member (human) or service_account." },
+    { name: "roles", type: "object", description: "Per-environment role map: owner, admin, developer, viewer." },
+    { name: "last_active_at", type: "timestamp", description: "Last dashboard or API activity; null for never-active." },
+  ]}
+/>
+
+## List users
+
+<ApiEndpoint method="GET" path="/users" />
+
+<ParamTable
+  label="Query parameters"
+  params={[
+    { name: "limit", type: "integer", description: "Items per page, 1–100.", default: "25" },
+    { name: "cursor", type: "string", description: "Cursor for the next page." },
+    { name: "kind", type: "string", description: "Filter: member or service_account." },
+    { name: "role", type: "string", description: "Filter by role in any environment." },
+  ]}
+/>
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v2/users?kind=service_account" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+<ResponseExample
+  status={200}
+  code={`{
+  "object": "list",
+  "data": [
+    {
+      "id": "usr_9wT2kLm4xP",
+      "object": "user",
+      "name": "svc-billing-ci",
+      "email": null,
+      "kind": "service_account",
+      "roles": { "test": "developer", "live": "developer" },
+      "created_at": "2026-07-11T13:20:08Z",
+      "last_active_at": "2026-09-17T09:58:31Z"
+    }
+  ],
+  "has_more": false,
+  "next_cursor": null
+}`}
+/>
+
+## Get a user
+
+<ApiEndpoint method="GET" path="/users/:id" />
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/users/usr_9wT2kLm4xP \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Create a service account
+
+<ApiEndpoint method="POST" path="/users/service-accounts" />
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", required: true, description: "Label, e.g. svc-terraform." },
+    { name: "roles", type: "object", required: true, description: "Per-environment role map, e.g. {\"live\": \"developer\"}." },
+  ]}
+/>
+
+<ResponseExample
+  status={201}
+  code={`{
+  "id": "usr_7dR1mPx9vW",
+  "object": "user",
+  "name": "svc-terraform",
+  "email": null,
+  "kind": "service_account",
+  "roles": { "live": "developer" },
+  "created_at": "2026-09-17T10:41:19Z",
+  "last_active_at": null
+}`}
+/>
+
+## Errors
+
+| Status | Code | Condition |
+| --- | --- | --- |
+| `403` | `insufficient_scope` | Key lacks `members:read` / `members:write` |
+| `404` | `resource_not_found` | No such user in this workspace |
+
+<Callout type="note">
+  Human membership (invites, role changes, removal) is dashboard-only - see [Permissions](/docs/concepts/permissions).
+</Callout>

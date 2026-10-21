@@ -1,0 +1,121 @@
+---
+title: Events
+description: The event object, event types, and the read-only events feed.
+updatedAt: 2026-09-02
+---
+
+Events are the immutable record of everything that happened inside a project - mutations, deliveries, system actions. They're the source for webhooks and the activity log.
+
+## The event object
+
+```json title="event"
+{
+  "id": "evt_3kR8mPx2vL",
+  "object": "event",
+  "type": "project.updated",
+  "project_id": "prj_9kLm2xVb7nQe",
+  "environment": "test",
+  "created_at": "2026-09-17T10:41:19Z",
+  "sequence": 10492,
+  "request_id": "req_8fK2mPx4vL",
+  "data": {
+    "object": { "id": "prj_9kLm2xVb7nQe", "name": "billing-sync-v2" },
+    "previous_attributes": { "name": "billing-sync" }
+  }
+}
+```
+
+<ParamTable
+  label="Attributes"
+  params={[
+    { name: "type", type: "string", description: "resource.action dot-notation type." },
+    { name: "sequence", type: "integer", description: "Monotonic per project - use for ordering, not timestamps." },
+    { name: "request_id", type: "string", description: "The API call that caused the event; null for system events." },
+    { name: "data.object", type: "object", description: "The resource after the change." },
+    { name: "data.previous_attributes", type: "object", description: "Fields before the change (update events only)." },
+  ]}
+/>
+
+## Event types
+
+| Type | Fired when |
+| --- | --- |
+| `project.created` | Project created |
+| `project.updated` | Mutable field changed |
+| `project.archived` | Soft-deleted |
+| `project.restored` | Restored from archive |
+| `project.member.added` | Member granted project access |
+| `webhook.endpoint.created` | Endpoint registered |
+| `webhook.endpoint.disabled` | Endpoint paused after 24h of failures |
+| `delivery.succeeded` | Delivery returned 2xx |
+| `delivery.failed` | Delivery exhausted retries |
+| `sync.completed` | Sync job finished |
+| `sync.failed` | Sync job failed terminally |
+| `audit_log.exported` | Audit entries streamed to SIEM |
+
+<Callout type="note">
+  Event types are additive - new types can appear at any time in v2. Subscribe with `["*"]` only if your handler tolerates unknown types.
+</Callout>
+
+## List events
+
+<ApiEndpoint method="GET" path="/events" />
+
+<ParamTable
+  label="Query parameters"
+  params={[
+    { name: "project_id", type: "string", required: true, description: "Project to read events from." },
+    { name: "type", type: "string", description: "Filter to one event type." },
+    { name: "created_after", type: "timestamp", description: "Start of time window." },
+    { name: "created_before", type: "timestamp", description: "End of time window." },
+    { name: "limit", type: "integer", description: "Items per page.", default: "25" },
+    { name: "cursor", type: "string", description: "Cursor for the next page." },
+  ]}
+/>
+
+```bash title="Terminal"
+curl "https://api.meridian.dev/v2/events?project_id=prj_9kLm2xVb7nQe&type=project.updated" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+<ResponseExample
+  status={200}
+  code={`{
+  "object": "list",
+  "data": [
+    {
+      "id": "evt_3kR8mPx2vL",
+      "object": "event",
+      "type": "project.updated",
+      "project_id": "prj_9kLm2xVb7nQe",
+      "environment": "test",
+      "created_at": "2026-09-17T10:41:19Z",
+      "sequence": 10492,
+      "request_id": "req_8fK2mPx4vL",
+      "data": {
+        "object": { "id": "prj_9kLm2xVb7nQe", "name": "billing-sync-v2" },
+        "previous_attributes": { "name": "billing-sync" }
+      }
+    }
+  ],
+  "has_more": false,
+  "next_cursor": null
+}`}
+/>
+
+## Get an event
+
+<ApiEndpoint method="GET" path="/events/:id" />
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/events/evt_3kR8mPx2vL \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+## Retention
+
+Events are retained **7 days** in `test` and **90 days** in `live`. Querying outside the window returns an empty list - export what you need for longer-term audit via webhooks to your own store.
+
+<Callout type="tip">
+  Rebuilding state from events? Sort by `sequence`, not `created_at` - timestamps have millisecond ties under burst writes; sequence never does.
+</Callout>

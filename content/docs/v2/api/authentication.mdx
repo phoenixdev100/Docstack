@@ -1,0 +1,119 @@
+---
+title: Authentication
+description: API reference for authentication - Bearer keys, restricted key scopes, the keys resource, and auth error codes.
+updatedAt: 2026-08-28
+---
+
+Requests authenticate with a Bearer token in the `Authorization` header. Keys are created in the dashboard or via the keys resource.
+
+```http title="Required header"
+Authorization: Bearer mrnd_test_4f8e2c1a9b7d3e5f6a0c
+```
+
+## Key formats
+
+| Prefix | Kind | Environment |
+| --- | --- | --- |
+| `mrnd_test_` | secret | test |
+| `mrnd_live_` | secret | live |
+| `mrnd_rk_` | restricted | determined at creation |
+
+## The keys resource
+
+Manage keys programmatically - creation, listing, revocation. The secret value is returned **once** at creation; afterwards only metadata is visible.
+
+<ApiEndpoint method="POST" path="/keys" />
+
+<ParamTable
+  label="Request body"
+  params={[
+    { name: "name", type: "string", required: true, description: "Label for the key, e.g. svc-billing-ci." },
+    { name: "environment", type: "string", required: true, description: "test or live." },
+    { name: "scopes", type: "string[]", description: "Restricted scopes like projects:read. Omit for a full secret key." },
+    { name: "expires_in_days", type: "integer", description: "Optional auto-expiry, 1–365." },
+    { name: "allowed_ips", type: "string[]", description: "Optional CIDR allowlist." },
+  ]}
+/>
+
+<CodeTabs>
+
+```bash title="cURL"
+curl -X POST https://api.meridian.dev/v2/keys \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "svc-metrics",
+    "environment": "live",
+    "scopes": ["events:read"],
+    "expires_in_days": 90
+  }'
+```
+
+```javascript title="JavaScript"
+const key = await client.keys.create({
+  name: "svc-metrics",
+  environment: "live",
+  scopes: ["events:read"],
+  expiresInDays: 90,
+});
+// key.secret => shown once - store it now
+```
+
+</CodeTabs>
+
+<ResponseExample
+  status={201}
+  code={`{
+  "id": "key_7hF2kLm9xQ",
+  "object": "api_key",
+  "name": "svc-metrics",
+  "environment": "live",
+  "scopes": ["events:read"],
+  "prefix": "mrnd_rk_8fK2",
+  "secret": "mrnd_rk_8fK2mPx4vL9nQe3dR7wT1yH5",
+  "expires_at": "2026-12-16T10:41:19Z",
+  "created_at": "2026-09-17T10:41:19Z"
+}`}
+/>
+
+<Callout type="important">
+  `secret` is returned exactly once. If you lose it, revoke the key and create a new one - there's no recovery path.
+</Callout>
+
+## Other operations
+
+| Operation | Endpoint |
+| --- | --- |
+| List keys | `GET /keys` |
+| Get a key | `GET /keys/:id` |
+| Revoke a key | `DELETE /keys/:id` |
+
+`GET /keys` returns metadata only - never secret material.
+
+## Auth errors
+
+<ParamTable
+  label="Error codes"
+  params={[
+    { name: "missing_api_key", type: "401", description: "No Authorization header, or wrong scheme." },
+    { name: "invalid_api_key", type: "401", description: "Malformed, revoked, or expired key." },
+    { name: "insufficient_scope", type: "403", description: "Restricted key lacks the required scope." },
+    { name: "environment_mismatch", type: "403", description: "Key's environment doesn't match the target resource." },
+    { name: "ip_not_allowed", type: "403", description: "Source IP outside the key's CIDR allowlist." },
+  ]}
+/>
+
+```json title="401 example"
+{
+  "error": {
+    "type": "authentication",
+    "code": "invalid_api_key",
+    "message": "The API key provided is invalid or has been revoked.",
+    "request_id": "req_8fK2mPx4vL"
+  }
+}
+```
+
+<Callout type="tip">
+  For operational patterns - rotation, injection, service accounts - see the [Authentication guide](/docs/guides/authentication).
+</Callout>

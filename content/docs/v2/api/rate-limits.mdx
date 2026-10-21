@@ -1,0 +1,95 @@
+---
+title: Rate limits
+description: Request quotas per environment, the headers that report them, and how to back off correctly.
+updatedAt: 2026-09-09
+---
+
+Every API key has a request budget. This page covers the quotas, how to read your remaining budget in-flight, and how to handle `429`s.
+
+## Quotas
+
+| Environment | Limit | Window |
+| --- | --- | --- |
+| `test` | 600 requests | per minute, rolling |
+| `live` | 1,200 requests | per minute, rolling |
+| `live` - elevated | Custom | contact support |
+
+The window is rolling, not fixed - each request's quota frees exactly 60s after it was made.
+
+## Budget headers
+
+Every response reports your budget:
+
+```http title="Rate-limit headers"
+X-RateLimit-Limit: 1200
+X-RateLimit-Remaining: 41
+X-RateLimit-Reset: 1726570060
+```
+
+| Header | Meaning |
+| --- | --- |
+| `X-RateLimit-Limit` | Your quota per window |
+| `X-RateLimit-Remaining` | Requests left before you hit it |
+| `X-RateLimit-Reset` | Unix timestamp when the oldest request's slot frees |
+
+Monitor `Remaining` - if it's trending toward 0, slow down *before* the first `429`.
+
+## The 429
+
+```json title="429 rate_limited"
+{
+  "error": {
+    "type": "rate_limit",
+    "code": "rate_limited",
+    "message": "Too many requests - retry after the indicated delay.",
+    "request_id": "req_4mP8xK2nL9qR"
+  }
+}
+```
+
+```http title="And the critical header"
+Retry-After: 12
+```
+
+`Retry-After` is **seconds** until you may retry - honor it exactly. Ignoring it earns progressively longer lockouts (the edge penalizes retry-storms).
+
+## Handling it correctly
+
+<Steps>
+  <Step title="Respect Retry-After">
+    On `429`, wait exactly `Retry-After` seconds - not a generic sleep, the header's value.
+
+    ```typescript title="Read the header, not a guess"
+    const wait = Number(res.headers.get("retry-after")) * 1000;
+    await sleep(wait);
+    ```
+  </Step>
+
+  <Step title="Add jitter under concurrency">
+    If many workers get `429` together, a shared `Retry-After` makes them all retry in lockstep - add random jitter (`wait + rand(0–500ms)`) to spread them.
+  </Step>
+
+  <Step title="Cap total retries">
+    SDKs retry `429` up to `maxRetries` (default 3) with exponential backoff + jitter. Beyond that, surface the error - sustained 429s mean your throughput exceeds quota, not a transient.
+  </Step>
+</Steps>
+
+## Burst behavior
+
+Short bursts above the rate are smoothed - the limiter allows a small token-bucket burst before the first `429`. Don't design around the burst; it's for jitter absorption, not sustained throughput.
+
+## Webhook delivery limits
+
+Deliveries don't count against API quota - they're limited separately: **60 deliveries/sec per endpoint**. Sustained backlog beyond that delays (doesn't drop) delivery.
+
+## Staying under quota
+
+- **Cache list responses** - most reads don't change per-request.
+- **Batch where possible** - one `PATCH` beats ten field updates.
+- **Filter server-side** - `?status=active` beats fetching everything and filtering locally.
+- **Watch `X-RateLimit-Remaining`** - it's free; ignore it and you're flying blind.
+- **Use webhooks, not polling** - if you're polling to detect changes, you want [webhooks](/docs/guides/webhooks) instead.
+
+<Callout type="tip">
+  Need more than 1,200 req/min sustained on `live`? Elevated quotas are available - describe your workload to support rather than engineering around the cap with multiple keys (quota-sharing across keys is detected and treated as one).
+</Callout>
