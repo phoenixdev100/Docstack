@@ -1,0 +1,70 @@
+---
+title: SSO & SAML
+description: Enforce single sign-on for your Meridian workspace - SAML 2.0 setup with Okta, Entra ID, and Google, plus domain enforcement.
+updatedAt: 2026-08-30
+---
+
+Workspaces on the Team plan and above can enforce SSO - members authenticate through your identity provider instead of Meridian credentials. SAML 2.0 is supported natively; OIDC via your IdP's SAML bridge.
+
+## Supported providers
+
+| IdP | Support |
+| --- | --- |
+| Okta | Native SAML app in the OIN |
+| Microsoft Entra ID (Azure AD) | Enterprise application SAML |
+| Google Workspace | Custom SAML app |
+| Any SAML 2.0 IdP | Manual metadata configuration |
+
+## Setup
+
+<Steps>
+  <Step title="Create the SAML app in your IdP">
+    Point it at Meridian's service provider:
+
+    | Field | Value |
+    | --- | --- |
+    | ACS URL | `https://auth.meridian.dev/saml/acs` |
+    | Entity ID / Audience | `https://meridian.dev/saml` |
+    | NameID format | `emailAddress` |
+
+    Required attributes: `email`, `firstName`, `lastName`.
+  </Step>
+
+  <Step title="Paste IdP metadata into Meridian">
+    Dashboard → **Settings → Security → SSO**: paste your IdP's metadata URL or XML. We pull the SSO URL, entity ID, and signing certificate automatically.
+  </Step>
+
+  <Step title="Assign a pilot user, then enforce">
+    Test sign-in with one account before enforcing. When it works, enable **Require SSO** - members must then authenticate via your IdP; password logins are disabled for your domain.
+  </Step>
+</Steps>
+
+## Domain enforcement
+
+Claim your email domain(s) under **Settings → Security → Domains**. Once verified:
+
+- Any sign-in from that domain is redirected to your IdP.
+- Users outside the domain can't join the workspace without an explicit invite.
+- Multiple domains are supported (`acme.io`, `acme.com`).
+
+## Role mapping
+
+Map IdP groups to Meridian roles - members get the right access on first login:
+
+| IdP group | Meridian role |
+| --- | --- |
+| `meridian-admins` | admin |
+| `meridian-developers` | developer |
+| `meridian-viewers` | viewer |
+
+Unmapped members land at `viewer` - least privilege by default. Owners are never auto-assigned; transfer ownership manually.
+
+## Session behavior
+
+- SSO sessions last **12 hours**; step-up auth isn't supported - use your IdP's session policies.
+- API keys are unaffected by SSO - service accounts continue working regardless of IdP state.
+- If the IdP is unreachable, owners retain a break-glass password sign-in (audited).
+
+<Callout type="warning">
+  Enabling **Require SSO** locks out password auth for all non-owner members immediately. Pilot with a small group first and keep an owner credential outside the IdP for break-glass access.
+</Callout>

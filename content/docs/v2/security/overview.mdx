@@ -1,0 +1,62 @@
+---
+title: Security overview
+description: How Meridian protects your data - encryption, key handling, network security, and responsible disclosure.
+updatedAt: 2026-09-08
+---
+
+## Data protection
+
+| Layer | Protection |
+| --- | --- |
+| In transit | TLS 1.3 everywhere; HTTP→HTTPS redirect with HSTS |
+| At rest | AES-256 at the storage layer; encrypted backups |
+| Secrets | API keys stored as one-way hashes - we can't read them back; `whsec_` secrets shown once, hashed at rest |
+| Isolation | Per-project data isolation; `test`/`live` fully separate at the data layer |
+
+## Key handling
+
+- Keys are **hashed** on receipt - the plaintext is only ever shown once at creation.
+- Restricted keys enforce `resource:action` scopes server-side - least privilege by default.
+- Key expiry (`expires_in_days`) and IP allowlists are supported - see [IP allowlisting](/docs/security/ip-allowlisting).
+- Rotate freely - `POST /keys` then `DELETE /keys/:id`; overlap the two for zero-downtime rotation.
+
+## Network security
+
+- Rate limiting and abuse detection at the edge (per-key quotas, anomaly scoring).
+- Webhook deliveries carry HMAC-SHA256 signatures with timestamps - recipients can verify origin and reject replays.
+- Egress for webhook deliveries comes from a documented, stable IP range - you can firewall inbound to it (see [Webhooks](/docs/guides/webhooks)).
+
+## Access controls
+
+- Per-environment roles: owner, admin, developer, viewer - see [Permissions](/docs/concepts/permissions).
+- SSO/SAML enforcement for workspaces - see [SSO & SAML](/docs/security/sso-saml).
+- SCIM for automated provisioning - see [SCIM](/docs/security/scim).
+- Audit logging of admin actions - see [Audit logs](/docs/security/audit-logs).
+
+## Operational security
+
+- 99.99% API SLA on paid plans; per-region status at [status.meridian.dev](https://status.meridian.dev).
+- Audit trail for every admin action (key issuance, role change, export).
+- Annual penetration testing; reports available under NDA on paid plans.
+- SOC 2 Type II, GDPR-compliant processing - see [Compliance](/docs/security/compliance).
+
+## Your side of it
+
+Security is shared. We protect the platform; you must:
+
+- Keep keys in a secret store, never in code or client-side apps - see [Authentication](/docs/guides/authentication).
+- Verify `Meridian-Signature` on every webhook delivery - replay tolerance ≤5 min.
+- Use restricted keys with minimum scopes for services.
+- Rotate keys on a schedule and on any suspected exposure.
+
+## Responsible disclosure
+
+Found a vulnerability? Email **security@meridian.dev** - we run a coordinated disclosure program:
+
+- Acknowledgement within 24 hours, severity assessment within 72.
+- Safe harbor for good-faith research.
+- Please don't test against other customers' data or disrupt service.
+
+<Callout type="important">
+  If you believe a key has leaked, rotate it immediately - `DELETE /keys/:id` revokes instantly. The rotation is faster than any investigation.
+</Callout>

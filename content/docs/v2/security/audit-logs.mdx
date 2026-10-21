@@ -1,0 +1,92 @@
+---
+title: Audit logs
+description: Track administrative actions across your workspace - what's logged, retention, streaming to SIEM, and querying via API.
+updatedAt: 2026-08-24
+---
+
+Every administrative action in your workspace writes an immutable audit record - who did what, when, and from where. Available on Team plans and above.
+
+## What's logged
+
+| Action class | Examples |
+| --- | --- |
+| Key lifecycle | `key.created`, `key.rotated`, `key.revoked`, `key.expired` |
+| Membership | `member.invited`, `member.role_changed`, `member.removed`, `member.deactivated` |
+| Access control | `sso.enabled`, `sso.enforced`, `domain.claimed`, `scim.token_created` |
+| Resources | `project.created`, `project.deleted`, `project.restored`, `endpoint.created` |
+| Data ops | `export.requested`, `export.downloaded` |
+| Security | `ip_allowlist.updated`, `login.failed`, `mfa.reset` |
+
+**Not logged**: routine API reads, webhook deliveries, and app-level traffic - those live in the [request log](/docs/guides/observability), not the audit trail.
+
+## Log entry shape
+
+```json title="audit_log entry"
+{
+  "id": "aud_4mP8xK2nL9qR",
+  "timestamp": "2026-09-17T10:41:19Z",
+  "actor": { "type": "member", "email": "ops@acme.io" },
+  "action": "key.created",
+  "target": { "type": "api_key", "id": "key_3nQ7wPx2vM" },
+  "source_ip": "203.0.113.41",
+  "user_agent": "dashboard/2.4.1",
+  "environment": "live",
+  "metadata": { "scopes": ["projects:read"], "expires_in_days": 90 }
+}
+```
+
+`actor.type` is `member`, `service_account`, `scim`, or `system` (e.g., automatic key expiry).
+
+## Querying
+
+### Dashboard
+
+**Settings → Audit log** - filter by action, actor, date range, and environment. Export to CSV for compliance reviews.
+
+### API
+
+```bash title="Query the audit log"
+curl "https://api.meridian.dev/v2/audit_logs?action=key.created&since=2026-09-01" \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+Filter params: `action`, `actor`, `since`, `until`, `environment`, `limit`, `cursor` (same pagination as every list - see [API overview](/docs/api)).
+
+## Streaming to SIEM
+
+For real-time ingestion (Splunk, Datadog, Sentinel), stream audit events as webhook deliveries:
+
+<Steps>
+  <Step title="Create an audit-events endpoint">
+    Register a webhook endpoint subscribed to `audit.*` - the event payloads are the audit entries above.
+
+    ```bash title="Subscribe to audit events"
+    meridian webhooks create \
+      --url https://siem.acme.io/meridian-audit \
+      --events 'audit.*'
+    ```
+  </Step>
+
+  <Step title="Verify and forward">
+    Your endpoint receives signed deliveries - verify `Meridian-Signature` like any webhook, then forward to your SIEM.
+  </Step>
+</Steps>
+
+## Retention
+
+| Plan | Retention |
+| --- | --- |
+| Team | 12 months |
+| Enterprise | 7 years (compliance-grade, exportable) |
+
+Entries are immutable - neither admins nor Meridian support can alter or delete them inside the retention window.
+
+## Compliance uses
+
+- **SOC 2 evidence** - the log demonstrates access review and change control.
+- **Incident forensics** - reconstruct exactly what an actor touched.
+- **Access reviews** - periodic export for "who had admin in Q3" questions.
+
+<Callout type="tip">
+  Stream `audit.*` to your SIEM even if you rarely look at the dashboard - the value of an audit trail is being there *before* you need it.
+</Callout>
