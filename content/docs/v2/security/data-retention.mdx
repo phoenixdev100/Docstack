@@ -1,0 +1,61 @@
+---
+title: Data retention
+description: How long Meridian keeps your data - per-object retention windows, deletion behavior, and backup roll-off.
+updatedAt: 2026-08-20
+---
+
+What we keep, for how long, and when it's truly gone.
+
+## Retention by object
+
+| Data | Retention |
+| --- | --- |
+| **Projects** | Indefinitely until archived; archives purge after **30 days** |
+| **API keys** | Metadata while active + **90 days** after revocation (auditability); the secret itself is hashed, never recoverable |
+| **Webhook endpoints** | Configuration while active; deleted endpoints purge immediately (secrets gone instantly) |
+| **Events** | **90 days** of event history per project (`GET /events` window) |
+| **Delivery records** | **30 days** - success and failure logs, response bodies |
+| **Audit logs** | 12 months (Team) / 7 years (Enterprise) |
+| **Request logs** | **30 days** - the dashboard request log |
+| **Test data** | All test-environment objects purge every **30 days** |
+| **Account/workspace data** | While the account is active + **90 days** post-deletion for billing/audit obligations |
+
+## Deletion semantics
+
+| Operation | What happens |
+| --- | --- |
+| `DELETE /projects/:id` | **Archive** - soft delete, config retained 30 days, restorable |
+| `DELETE /keys/:id` | **Immediate** - the key stops working now; metadata retained 90 days for the audit trail |
+| `DELETE /webhooks/:id` | **Immediate** - endpoint gone, deliveries stop, secret purged |
+| Workspace deletion | All projects archive; full purge after 90 days |
+
+## The event horizon
+
+Events are the time-series most affected by retention: anything older than **90 days** isn't in `GET /events` anymore. If you need longer history:
+
+- **Export** - `POST /exports` dumps events to a signed URL (JSON-lines) before the window closes.
+- **Your own store** - consume webhooks into your warehouse; that copy has whatever retention *you* set.
+
+```bash title="Export events to a file"
+curl -X POST https://api.meridian.dev/v2/exports \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -d '{"type": "events", "project_id": "prj_9kLm2xVb7nQe", "since": "2026-01-01"}'
+# → { "url": "https://exports.meridian.dev/…signed…" }
+```
+
+## Backups
+
+- Platform backups are encrypted, in-region, and roll off within **30 days** of the source data's deletion.
+- Restores are for disaster recovery, not point-in-time user access - deleted objects don't come back through backups.
+
+## Legal & compliance notes
+
+- Deletion means deletion from active systems; backup roll-off follows within 30 days.
+- Billing records may be retained as legally required (typically 7 years) - that's transaction records, not platform data.
+- GDPR erasure requests are honored through the same deletion paths - see [Compliance](/docs/security/compliance).
+
+## Planning around it
+
+- Treat `GET /events` as a rolling 90-day window, not an archive - export or consume continuously.
+- Archived projects are a grace period, not storage - restore within 30 days or it's permanent.
+- If a compliance regime requires longer retention, stream events/audit logs to your own storage (see [Audit logs](/docs/security/audit-logs#streaming-to-siem)).

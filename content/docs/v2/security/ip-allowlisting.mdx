@@ -1,0 +1,65 @@
+---
+title: IP allowlisting
+description: Restrict API keys to specific source IPs or CIDR ranges - network-level credential protection for live keys.
+updatedAt: 2026-08-22
+---
+
+IP allowlisting adds a network boundary to a key: even if the key leaks, requests from outside your allowed ranges are rejected. Strongest protection for `live` keys used from fixed infrastructure.
+
+## How it works
+
+- Attach an allowlist (IPs/CIDRs) to a key at creation or later via `PATCH /keys/:id`.
+- Requests from a non-matching source → `403` with `code: ip_not_allowed`.
+- Empty allowlist = any IP (default).
+- Works for individual keys - each key has its own list.
+
+```json title="403 on disallowed IP"
+{
+  "error": {
+    "type": "authentication",
+    "code": "ip_not_allowed",
+    "message": "This API key is restricted to a set of allowed IP addresses.",
+    "request_id": "req_7mP4xK2nL9qR"
+  }
+}
+```
+
+## Managing allowlists
+
+```bash title="Create a restricted key with an allowlist"
+curl -X POST https://api.meridian.dev/v2/keys \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "prod-backend",
+    "environment": "live",
+    "scopes": ["projects:read", "webhooks:read"],
+    "allowed_ips": ["203.0.113.0/24", "198.51.100.14"]
+  }'
+```
+
+```bash title="Update an existing key's list"
+curl -X PATCH https://api.meridian.dev/v2/keys/key_3nQ7wPx2vM \
+  -d '{"allowed_ips": ["203.0.113.0/24"]}' \
+  -H "Authorization: Bearer $MERIDIAN_API_KEY"
+```
+
+Send `[]` to remove restrictions.
+
+## Practices
+
+- **Restrict `live` keys to egress IPs** - your servers, NAT gateway, or VPN exit. Cloud IPs work if they're static.
+- **Don't allowlist `test` keys** - developers move networks; the friction isn't worth it for sandbox data.
+- **Keep one unrestricted break-glass admin key** in a vault - a misconfigured allowlist can lock out automation.
+- **Pair with expiry + rotation** - allowlisting stops external misuse; rotation bounds the window if it fails.
+- **Beware dynamic egress** - serverless/container platforms rotate source IPs; allowlisting only works where egress is fixed (static egress NAT or VPC endpoints).
+
+## Limitations
+
+- Protects the *API plane* - it doesn't affect dashboard sign-in (that's SSO's job).
+- IPv4 and IPv6 CIDRs both supported; hostnames are not.
+- Behind a proxy/LB, we evaluate the real client IP - spoofed `X-Forwarded-For` headers don't bypass it.
+
+<Callout type="warning">
+  Adding an allowlist to a key that's actively used from a dynamic IP will immediately break that integration - verify your egress IPs first (`GET /v2/me` returns your apparent IP if unsure).
+</Callout>

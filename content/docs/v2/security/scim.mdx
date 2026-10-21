@@ -1,0 +1,79 @@
+---
+title: SCIM provisioning
+description: Automate user lifecycle with SCIM 2.0 - create, update, and deprovision workspace members from your IdP.
+updatedAt: 2026-08-28
+---
+
+SCIM 2.0 keeps Meridian membership in sync with your IdP: people join with the right role on day one and lose access the moment they leave - no manual cleanup.
+
+## What SCIM does
+
+- **Create** members when assigned in the IdP
+- **Update** attributes (name, role) on change
+- **Deactivate** on unassignment - Meridian access revokes instantly
+- **Push groups** - map IdP groups to Meridian roles
+
+Service accounts are never managed by SCIM (they're not humans).
+
+## Endpoint
+
+```text title="SCIM base URL"
+https://api.meridian.dev/scim/v2
+```
+
+Authenticate with a SCIM bearer token - generated in **Settings → Security → SCIM**. The token is workspace-scoped and shown once.
+
+## Supported operations
+
+| Operation | SCIM call | Effect |
+| --- | --- | --- |
+| List users | `GET /Users` | Read members (paginated) |
+| Create user | `POST /Users` | Invite with mapped role |
+| Read user | `GET /Users/:id` | Fetch one member |
+| Update | `PATCH /Users/:id` | Attribute/role change |
+| Deactivate | `PATCH /Users/:id` (`active: false`) | Revoke access |
+| Groups | `GET|POST /Groups` | Role group mapping |
+
+## Attribute mapping
+
+| SCIM attribute | Meridian field |
+| --- | --- |
+| `userName` | `email` (login identity) |
+| `name.givenName` / `name.familyName` | `name` |
+| `active` | membership enabled/disabled |
+| `groups[]` | role mapping via group rules |
+
+## Setup (Okta example)
+
+<Steps>
+  <Step title="Enable SCIM in Meridian">
+    **Settings → Security → SCIM → Enable** - copy the bearer token.
+  </Step>
+  <Step title="Configure the IdP app">
+    In Okta's Meridian app → Provisioning: paste the base URL + token, enable **Create Users**, **Update Attributes**, **Deactivate Users**.
+  </Step>
+  <Step title="Map groups to roles">
+    Push Okta groups; assign each a Meridian role under **SCIM → Group mappings**. Members of `meridian-developers` become `developer`, etc.
+  </Step>
+  <Step title="Verify">
+    Assign a test user → confirm they appear in **Members** with the mapped role. Unassign → access should revoke within seconds.
+  </Step>
+</Steps>
+
+## Behavior notes
+
+- Deactivation is **instant** - sessions end, API calls with their user context fail. (Their keys are unaffected - keys belong to the workspace.)
+- If a deactivated user is re-added, they're restored with their previous role unless the group mapping changed.
+- SCIM-created members bypass email invites - they authenticate via your configured SSO (see [SSO & SAML](/docs/security/sso-saml)).
+
+## Errors and troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| `401` on SCIM calls | Token revoked/expired - regenerate in settings |
+| User created but `viewer` | No group mapping matched - check group push |
+| Deactivation didn't revoke | IdP sent `active: true` patch later - check provisioning logs |
+
+<Callout type="tip">
+  Pair SCIM with SSO enforcement - SCIM handles the *lifecycle* (who exists), SSO handles the *authentication* (how they sign in). Together, membership is fully IdP-driven.
+</Callout>

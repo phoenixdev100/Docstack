@@ -1,0 +1,53 @@
+---
+title: Compliance
+description: Meridian's compliance certifications - SOC 2, GDPR, data residency - and what they mean for your integration.
+updatedAt: 2026-09-02
+---
+
+## Certifications
+
+| Framework | Status | Scope |
+| --- | --- | --- |
+| **SOC 2 Type II** | Current - annual audit | Security, availability, confidentiality |
+| **GDPR** | Compliant processor | EU/UK data processing |
+| **CCPA/CPRA** | Compliant | California privacy rights |
+| **ISO 27001** | In progress - expected Q2 2027 | ISMS certification |
+| **HIPAA** | Business Associate Agreements available on Enterprise | PHI processing (Enterprise only) |
+
+Reports (SOC 2 Type II, pentest summaries) are available under NDA via your account team - request through **Settings → Compliance** or security@meridian.dev.
+
+## Data residency
+
+- Projects pin to a **region** at creation (`us-east`, `eu-west`, `ap-south`) - primary data lives and is processed there.
+- Backups and replicas stay in-region; `eu-west` project data doesn't leave the EU.
+- Control-plane metadata (auth, billing) is US-hosted - the data plane honors residency.
+
+## GDPR specifics
+
+- **DPA** - our Data Processing Agreement is available on all paid plans; request via Settings → Compliance.
+- **Sub-processors** - the current list is published in the DPA annex; changes are announced 30 days ahead.
+- **Data subject rights** - export and delete user data via the API (`GET /users/:id`, `DELETE /users/:id`); we assist with requests as your processor.
+- **Breach notification** - contractual obligation to notify affected customers within 72 hours.
+
+## Retention & deletion
+
+- Test environment data purges every 30 days.
+- Soft-deleted resources retain for 30 days then purge permanently.
+- Audit logs: 12 months (Team) / 7 years (Enterprise) - see [Audit logs](/docs/security/audit-logs).
+- Backups roll off within 30 days of deletion - see [Data retention](/docs/security/data-retention).
+
+## Vendor practices
+
+- Encryption in transit (TLS 1.3) and at rest (AES-256) - see [Security overview](/docs/security/overview).
+- Least-privilege internal access with audit trails; annual penetration testing.
+- Incident response runbook with customer notification SLAs.
+
+## Using Meridian in regulated environments
+
+- **PCI DSS** - Meridian is not a PCI platform; don't send cardholder data to the API (we're a dev platform, not payments infrastructure).
+- **HIPAA** - a BAA is required before sending PHI; available on Enterprise plans.
+- **Export control** - data stays in-region; cross-region replication is opt-in only.
+
+<Callout type="note">
+  This page summarizes our posture for engineering review - it's not legal documentation. The DPA and SOC 2 report are the authoritative documents; request them via your account team.
+</Callout>
