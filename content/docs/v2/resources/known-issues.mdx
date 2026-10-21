@@ -1,0 +1,51 @@
+---
+title: Known issues
+description: Currently tracked issues and their workarounds - updated as fixes ship. For outages, see the status page.
+updatedAt: 2026-09-15
+---
+
+Actively tracked issues with workarounds. These aren't outages - for real-time service status see [status.meridian.dev](https://status.meridian.dev). Something missing? [Report it](/docs/resources/support).
+
+## API
+
+| Issue | Status | Workaround |
+| --- | --- | --- |
+| `GET /events` occasionally returns out-of-order `sequence` under heavy write load | Investigating | Sort by `sequence` client-side, not array position |
+| `PATCH` on `metadata` with nested objects clears sibling keys | Expected behavior - metadata merges one level deep | Send the full `metadata` object for nested structures |
+| `next_cursor` returned on final page in rare edge case | Low priority | Treat empty `data` + a cursor as "done" - the extra fetch returns `[]` |
+
+## Webhooks
+
+| Issue | Status | Workaround |
+| --- | --- | --- |
+| Redelivered events occasionally arrive out of `sequence` order after endpoint re-enable | Known - queued backlog drains unordered | Buffer by `sequence` on ingest if strict ordering matters |
+| Delivery log shows `response_body` truncated at 4 KB | By design | Full bodies in your own receiver logs; the log is for diagnosis, not storage |
+| `webhook.endpoint.disabled` fires once per endpoint, not per incident | By design | Alert on it once; repeated failures don't re-notify until re-enabled |
+
+## SDKs
+
+| Issue | Affects | Workaround |
+| --- | --- | --- |
+| `autoPagingEach` can double-visit an item if it's mutated mid-iteration | All SDKs | Collect IDs first, mutate after the loop |
+| Python SDK: `X-RateLimit-Remaining` not exposed on `Response` object | `meridian-python < 3.1` | Upgrade - 3.1+ exposes `response.headers` |
+| Go SDK: context cancellation mid-pagination leaves a goroutine | `meridian-go < 2.3` | Upgrade to 2.3+ |
+
+## Dashboard
+
+| Issue | Status | Workaround |
+| --- | --- | --- |
+| Safari 18 occasionally fails to load the delivery log on first open | Investigating | Hard refresh (⌘⇧R); Chrome/Firefox unaffected |
+| Audit log CSV export truncates `metadata` fields >500 chars | Low priority | Use the API for full-fidelity export |
+
+## Recently fixed
+
+| Issue | Fixed in |
+| --- | --- |
+| `429` responses missing `Retry-After` on `test` environment | 2026-08-28 |
+| Signature verification failing on bodies with Unicode escapes | SDK 4.2.1 / API 2026-08-19 |
+| Dashboard date picker off-by-one in UTC+ timezones | 2026-08-11 |
+| Duplicate `audit.member.invited` entries | 2026-07-30 |
+
+<Callout type="note">
+  This page tracks issues lasting longer than a release cycle - transient incidents live on the [status page](https://status.meridian.dev), and the [troubleshooting guide](/docs/resources/troubleshooting) covers configuration problems that aren't bugs.
+</Callout>

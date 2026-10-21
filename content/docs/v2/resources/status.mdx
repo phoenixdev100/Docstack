@@ -1,0 +1,60 @@
+---
+title: Status
+description: Platform status, uptime SLAs, incident history, and how to monitor service health programmatically.
+updatedAt: 2026-08-20
+---
+
+Meridian's real-time status lives at [status.meridian.dev](https://status.meridian.dev) - subscribe there for incident notifications via email, RSS, or webhook.
+
+## What the status page covers
+
+| Component | What it measures |
+| --- | --- |
+| **API** | `api.meridian.dev` availability and p95 latency per region |
+| **Dashboard** | `app.meridian.dev` availability |
+| **Webhooks** | Delivery success rate and median delivery latency |
+| **Event bus** | Event ingestion and fan-out lag |
+
+Status is reported **per region** (`us-east`, `eu-west`, `ap-south`) - an incident in one region doesn't affect projects homed elsewhere.
+
+## Checking status programmatically
+
+The API serves a lightweight health endpoint that requires no auth:
+
+```bash title="Terminal"
+curl https://api.meridian.dev/v2/health
+```
+
+```json title="Response"
+{
+  "status": "operational",
+  "region": "us-east",
+  "timestamp": "2026-09-17T10:41:19Z"
+}
+```
+
+Possible `status` values: `operational`, `degraded`, `partial_outage`, `major_outage`. Use it for deploy-time gating or synthetic monitoring - it's cached for 30 seconds, so it won't reflect second-to-second changes.
+
+## Uptime and SLAs
+
+- **99.99% monthly uptime** SLA for the API on paid plans (credits applied automatically).
+- Status page history retains **13 months** of incident records.
+- Planned maintenance is announced **72 hours** ahead on the status page and changelog.
+
+## During an incident
+
+- **Client behavior**: SDKs already retry `5xx` and `503` with backoff - don't disable retries during incidents.
+- **Webhooks**: deliveries that fail during an incident follow the normal [retry schedule](/docs/guides/webhooks#retries) - nothing is lost; delivery just lands late.
+- **Your runbook**: alert on your own error rates, not just our status page - region-scoped incidents may not affect your projects.
+
+<Callout type="tip">
+  Subscribe to status updates via webhook on the status page itself - pipe `component.status_changed` notifications into the same Slack/PagerDuty channel as your own alerts.
+</Callout>
+
+## Reporting an issue
+
+If you see errors we haven't reported:
+
+1. Capture the `request_id` (response header `Meridian-Request-Id` or error body).
+2. Note your region and approximate time.
+3. Contact support from the dashboard - `request_id` values let us trace the exact call through our logs.

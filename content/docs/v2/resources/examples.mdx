@@ -1,0 +1,83 @@
+---
+title: Examples
+description: Runnable example apps, request collections, and reference implementations for common integration patterns.
+updatedAt: 2026-08-24
+---
+
+Complete, runnable examples live in the [meridian/examples](https://github.com/meridian/examples) repository. Each one is a real project you can clone, configure with a test key, and run in minutes.
+
+## Example apps
+
+| Example | Stack | Demonstrates |
+| --- | --- | --- |
+| `webhook-receiver` | Node + Express | Signature verification, raw-body handling, idempotent processing |
+| `webhook-receiver-flask` | Python + Flask | Same pattern with `verify_signature` |
+| `provision-on-signup` | Next.js | Create a project when a user signs up (SaaS provisioning) |
+| `sync-worker` | Go + cron | Scheduled sync job with checkpointed `sequence` cursor |
+| `slack-alerts` | Node | Forward `delivery.failed` events to a Slack channel |
+| `terraform-project` | Terraform | Project + webhook endpoint as infrastructure-as-code |
+
+## The webhook receiver (canonical)
+
+The most-referenced example - a production-shaped receiver:
+
+```javascript title="webhook-receiver/server.js" {14-19}
+import express from "express";
+import { verifyWebhookSignature } from "@meridian/sdk/webhooks";
+
+const app = express();
+
+// Raw body is REQUIRED for signature verification.
+app.post(
+  "/webhooks/meridian",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let event;
+    try {
+      event = verifyWebhookSignature(
+        req.body,
+        req.headers["meridian-signature"],
+        process.env.WEBHOOK_SECRET
+      );
+    } catch {
+      return res.status(400).end("invalid signature");
+    }
+
+    await queue.enqueue(event);      // hand off async work
+    res.status(200).end("ok");       // respond inside 10s
+  }
+);
+```
+
+```bash title="Run it"
+git clone https://github.com/meridian/examples
+cd examples/webhook-receiver
+cp .env.example .env   # add your test key + whsec_
+npm install && npm start
+ngrok http 3000        # register the URL as a test endpoint
+```
+
+## Request collection
+
+A maintained [HTTP collection](https://github.com/meridian/examples/tree/main/http) covers every endpoint - importable into Bruno, Insomnia, or Postman. Requests use a `{{base_url}}` + `{{api_key}}` environment so one config works for test and live.
+
+## Pattern recipes
+
+<Accordion>
+  <AccordionItem title="Provision a project per customer (multi-tenant SaaS)">
+    On signup, `POST /projects` with `metadata: {customer_id}`. Store the returned `prj_` on the customer record. Use one restricted key with `projects:write` and a per-key idempotency key derived from your internal signup ID - retries won't double-provision.
+  </AccordionItem>
+  <AccordionItem title="Keep an external system in sync">
+    Poll `GET /events?type=sync.completed` with a checkpointed `sequence` cursor, or better, subscribe a webhook endpoint to `sync.completed` and pull the changed resource on demand. Events tell you *what changed*; the API gets you *current state*.
+  </AccordionItem>
+  <AccordionItem title="Alert on webhook delivery failures">
+    Register a lightweight endpoint subscribed only to `webhook.endpoint.disabled` and `delivery.failed`. Route those events to PagerDuty/Slack - that's your dead-letter alerting, built on the same delivery system it's monitoring.
+  </AccordionItem>
+  <AccordionItem title="Rotate keys on a schedule">
+    Cron job: `POST /keys` (same scopes) → update secret store → verify `last_used_at` moves → `DELETE /keys/:id` on the old key. The examples repo has a complete `key-rotator` in Go.
+  </AccordionItem>
+</Accordion>
+
+<Callout type="tip">
+  Every example uses the `test` environment - none of them can touch live data with the credentials in their `.env.example` files.
+</Callout>

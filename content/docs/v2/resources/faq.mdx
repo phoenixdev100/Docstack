@@ -1,0 +1,65 @@
+---
+title: FAQ
+description: Common questions about environments, keys, webhooks, limits, and migrating between API versions.
+updatedAt: 2026-09-01
+---
+
+## General
+
+<Accordion>
+  <AccordionItem title="What's the difference between test and live?">
+    They're fully isolated copies of a project's runtime. Separate keys (`mrnd_test_`/`mrnd_live_`), separate webhook endpoints, separate event history, separate rate limits. The environment is chosen by which key you send - there is no mode flag. See [Environments](/docs/concepts/environments).
+  </AccordionItem>
+  <AccordionItem title="Is there a publishable/client-side API key?">
+    No. All Meridian keys are secrets for server-side use only. If you need client-triggered behavior, proxy through your own backend.
+  </AccordionItem>
+  <AccordionItem title="Which region should I choose?">
+    The one closest to your infrastructure (latency) or required by compliance (data residency). Region is set at project creation and can't be changed - see [Projects](/docs/concepts/projects#choosing-a-region).
+  </AccordionItem>
+</Accordion>
+
+## API and keys
+
+<Accordion>
+  <AccordionItem title="Why did my request return 404 for a resource that exists?">
+    Almost always an environment mismatch - the resource exists in `live` but your key is `mrnd_test_` (or vice versa). Check the key prefix and the environment badge in the dashboard.
+  </AccordionItem>
+  <AccordionItem title="How do I retry a failed POST safely?">
+    Send an `Idempotency-Key` header. Repeating the same key + body within 24h returns the original response instead of creating a duplicate. SDKs attach one automatically - see [Error handling](/docs/guides/error-handling#idempotent-retries).
+  </AccordionItem>
+  <AccordionItem title="What are the rate limits?">
+    600 req/min in `test`, 5,000 req/min in `live`, per key, rolling window. Responses carry `X-RateLimit-*` headers; `429` responses include `Retry-After`. Higher limits are available on paid plans.
+  </AccordionItem>
+  <AccordionItem title="Do list endpoints support offset pagination?">
+    No - v2 is cursor-only (`cursor`, `limit`, `has_more`, `next_cursor`). Offset pagination was removed in v2.1.0 because it skips/duplicates rows under concurrent writes.
+  </AccordionItem>
+</Accordion>
+
+## Webhooks
+
+<Accordion>
+  <AccordionItem title="Why is signature verification failing?">
+    Two common causes: the body was parsed before verification (verify the **raw** bytes), or you're using the wrong `whsec_` secret - each endpoint has its own. In Express, mount `express.raw()` on the webhook route. See [Webhooks](/docs/guides/webhooks#verifying-signatures).
+  </AccordionItem>
+  <AccordionItem title="My endpoint got paused - how do I resume it?">
+    Endpoints pause after 24h of consecutive delivery failures. Fix the receiver, then either replay one delivery successfully (auto-resumes) or `PATCH /webhooks/:id` with `status: "active"`. You get a `webhook.endpoint.disabled` event when it happens.
+  </AccordionItem>
+  <AccordionItem title="Are webhook deliveries ordered?">
+    No - deliveries are at-least-once and unordered. Dedupe on `event.id` and reorder by `event.sequence` if ordering matters for your use case.
+  </AccordionItem>
+</Accordion>
+
+## Migration
+
+<Accordion>
+  <AccordionItem title="How do I migrate from v1 to v2?">
+    v2 changed pagination (offset → cursor), webhook signatures (`X-Meridian-Signature` → `Meridian-Signature`), and error shape. The [v1 docs](/docs/v1/api) remain available via the version switcher; v1 reaches end-of-life on 2027-03-31.
+  </AccordionItem>
+  <AccordionItem title="Will my v1 keys work on v2 endpoints?">
+    Keys are version-agnostic - a key works on whichever paths its scopes allow. But v1 and v2 resources are separate namespaces; a `prj_` created via v1 won't appear in v2 lists.
+  </AccordionItem>
+</Accordion>
+
+## Still stuck?
+
+Search these docs with `⌘K`, check the [status page](https://status.meridian.dev) during odd behavior, or contact support from the dashboard - include a `request_id` for the fastest diagnosis.
