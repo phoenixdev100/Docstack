@@ -1,0 +1,181 @@
+---
+title: JavaScript SDK
+description: "@meridian/sdk - the official TypeScript client: installation, configuration, methods, pagination, retries, and webhook helpers."
+updatedAt: 2026-09-08
+---
+
+The official TypeScript client for Node.js 18.17+, Deno, Bun, and edge runtimes. Ships with full types, automatic retries, idempotency keys, auto-pagination, and webhook signature verification.
+
+## Installation
+
+<CodeTabs>
+
+```bash title="npm"
+npm install @meridian/sdk
+```
+
+```bash title="yarn"
+yarn add @meridian/sdk
+```
+
+```bash title="pnpm"
+pnpm add @meridian/sdk
+```
+
+</CodeTabs>
+
+## Initialization
+
+```typescript title="client.ts"
+import { Meridian } from "@meridian/sdk";
+
+const client = new Meridian(process.env.MERIDIAN_API_KEY);
+```
+
+With options:
+
+```typescript title="client.ts"
+const client = new Meridian(process.env.MERIDIAN_API_KEY, {
+  baseUrl: "https://api.meridian.dev/v2", // default
+  timeout: 30_000,                        // ms per attempt
+  maxRetries: 3,                          // for 429 and 5xx
+  defaultHeaders: { "X-Team": "payments" },
+});
+```
+
+## Methods
+
+### projects
+
+| Method | Endpoint | Returns |
+| --- | --- | --- |
+| `projects.create(params)` | `POST /projects` | `Project` |
+| `projects.get(id)` | `GET /projects/:id` | `Project` |
+| `projects.update(id, params)` | `PATCH /projects/:id` | `Project` |
+| `projects.delete(id)` | `DELETE /projects/:id` | `DeletedProject` |
+| `projects.list(params?)` | `GET /projects` | `AsyncIterable<Project>` |
+| `projects.restore(id)` | `POST /projects/:id/restore` | `Project` |
+
+```typescript title="Create and read back"
+const project = await client.projects.create({
+  name: "billing-sync",
+  region: "us-east",
+  metadata: { team: "payments" },
+});
+
+const fetched = await client.projects.get(project.id);
+```
+
+### Auto-pagination
+
+`list` returns an async iterator that fetches pages transparently:
+
+```typescript title="Iterate every project"
+for await (const project of client.projects.list({ status: "active" })) {
+  console.log(project.id, project.name);
+}
+```
+
+For manual control, `listPage` returns one page with `nextCursor`:
+
+```typescript title="Manual pagination"
+const page = await client.projects.listPage({ limit: 50 });
+if (page.hasMore) {
+  const next = await client.projects.listPage({
+    limit: 50,
+    cursor: page.nextCursor,
+  });
+}
+```
+
+### webhooks
+
+| Method | Endpoint |
+| --- | --- |
+| `webhooks.create(params)` | `POST /webhooks` |
+| `webhooks.list(params?)` | `GET /webhooks` |
+| `webhooks.deliveries(id, params?)` | `GET /webhooks/:id/deliveries` |
+| `webhooks.replay(id, deliveryId)` | `POST …/deliveries/:id/replay` |
+| `webhooks.rotateSecret(id)` | `POST /webhooks/:id/rotate_secret` |
+
+### events
+
+| Method | Endpoint |
+| --- | --- |
+| `events.list(params)` | `GET /events` |
+| `events.get(id)` | `GET /events/:id` |
+
+### keys / users
+
+`keys.create`, `keys.list`, `keys.delete`; `users.list`, `users.get`, `users.createServiceAccount`.
+
+## Types
+
+Every resource is fully typed - the package is written in TypeScript and ships `.d.ts` for everything:
+
+```typescript title="Types"
+import type {
+  Project,
+  ProjectCreateParams,
+  Event,
+  WebhookEndpoint,
+  Delivery,
+  MeridianError,
+} from "@meridian/sdk";
+```
+
+Region, status, and event-type fields are string literal unions, so `region: "us-east"` type-checks and `region: "mars"` doesn't compile.
+
+## Webhook verification
+
+```typescript title="webhooks.ts" {6}
+import { verifyWebhookSignature, SignatureVerificationError } from "@meridian/sdk/webhooks";
+
+export function handler(rawBody: string | Buffer, signature: string | undefined) {
+  try {
+    return verifyWebhookSignature(rawBody, signature, process.env.WEBHOOK_SECRET!);
+  } catch (e) {
+    if (e instanceof SignatureVerificationError) return null;
+    throw e;
+  }
+}
+```
+
+Pass the **raw body** - parsing JSON first breaks the HMAC. In Express, mount `express.raw({ type: "application/json" })` on the webhook route.
+
+## Error handling
+
+All API errors throw `MeridianError` with typed fields:
+
+```typescript title="errors.ts"
+import { MeridianError } from "@meridian/sdk";
+
+try {
+  await client.projects.create({ name: "x", region: "us-east" });
+} catch (e) {
+  if (e instanceof MeridianError) {
+    e.status;     // 409
+    e.code;       // "resource_conflict"
+    e.requestId;  // req_8fK2mPx4vL - quote this to support
+  }
+}
+```
+
+Retries on `429`/`5xx` happen automatically with exponential backoff + jitter; `maxRetries: 0` disables them.
+
+## Request options per call
+
+Every method accepts an options object as its last argument:
+
+```typescript title="Per-call overrides"
+await client.projects.create(params, {
+  idempotencyKey: "provision-acme-001", // overrides the auto key
+  timeout: 60_000,
+  maxRetries: 0,
+  signal: abortController.signal,        // AbortSignal support
+});
+```
+
+## Changelog and versioning
+
+The package follows semver - breaking changes only in major versions. See the [changelog](/docs/changelog) for release notes and the [v1 → v2 migration notes](/docs/v1/api) if you're upgrading.

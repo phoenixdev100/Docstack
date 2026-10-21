@@ -1,0 +1,156 @@
+---
+title: Python SDK
+description: "meridian - the official Python client: installation, sync and async clients, auto-pagination, retries, and webhook verification."
+updatedAt: 2026-08-30
+---
+
+The official Python client for Python 3.9+. Fully typed (Pyright/mypy clean), with sync and asyncio clients, auto-pagination, retries, and webhook verification.
+
+## Installation
+
+<CodeTabs>
+
+```bash title="pip"
+pip install meridian
+```
+
+```bash title="poetry"
+poetry add meridian
+```
+
+```bash title="uv"
+uv add meridian
+```
+
+</CodeTabs>
+
+## Initialization
+
+```python title="client.py"
+import os
+from meridian import Meridian
+
+client = Meridian(os.environ["MERIDIAN_API_KEY"])
+```
+
+With options:
+
+```python title="client.py"
+client = Meridian(
+    os.environ["MERIDIAN_API_KEY"],
+    timeout=30.0,        # seconds per attempt
+    max_retries=3,       # for 429 and 5xx
+)
+```
+
+For asyncio:
+
+```python title="async_client.py"
+from meridian import AsyncMeridian
+
+client = AsyncMeridian(os.environ["MERIDIAN_API_KEY"])
+project = await client.projects.create(name="billing-sync", region="us-east")
+```
+
+## Methods
+
+### projects
+
+| Method | Endpoint | Returns |
+| --- | --- | --- |
+| `projects.create(**params)` | `POST /projects` | `Project` |
+| `projects.get(id)` | `GET /projects/:id` | `Project` |
+| `projects.update(id, **params)` | `PATCH /projects/:id` | `Project` |
+| `projects.delete(id)` | `DELETE /projects/:id` | `DeletedProject` |
+| `projects.list(**params)` | `GET /projects` | `Iterator[Project]` |
+| `projects.restore(id)` | `POST /projects/:id/restore` | `Project` |
+
+```python title="Usage"
+project = client.projects.create(name="billing-sync", region="us-east")
+
+# Auto-paginating iterator
+for p in client.projects.list(status="active"):
+    print(p.id, p.name)
+```
+
+### webhooks / events / keys / users
+
+```python title="Other resources"
+endpoint = client.webhooks.create(
+    project_id=project.id,
+    url="https://api.acme.io/webhooks/meridian",
+    events=["project.updated"],
+)
+
+for event in client.events.list(project_id=project.id, type="project.updated"):
+    print(event.sequence, event.data["object"]["name"])
+
+key = client.keys.create(name="svc-ci", environment="test",
+                         scopes=["events:read"], expires_in_days=30)
+```
+
+## Webhook verification
+
+```python title="webhook.py"
+from meridian.webhooks import verify_signature, SignatureVerificationError
+
+@app.post("/webhooks/meridian")
+def receive(request):
+    try:
+        event = verify_signature(
+            request.data,                       # raw bytes required
+            request.headers["Meridian-Signature"],
+            os.environ["WEBHOOK_SECRET"],
+        )
+    except SignatureVerificationError:
+        return "", 400
+    print(event["type"], event["data"]["object"]["id"])
+    return "", 200
+```
+
+<Callout type="important">
+  Pass the raw request body (`request.data`, `await request.body()`, etc.) - parsing JSON before verifying breaks the HMAC.
+</Callout>
+
+## Types and errors
+
+All responses are typed dataclasses/pydantic models. Errors raise `MeridianError` subclasses:
+
+```python title="errors.py"
+from meridian import MeridianError, RateLimitError, NotFoundError
+
+try:
+    client.projects.create(name="x", region="us-east")
+except RateLimitError as e:
+    retry_after = e.retry_after     # seconds from Retry-After header
+except NotFoundError as e:
+    print(e.request_id)
+except MeridianError as e:
+    print(e.status, e.code, e.request_id)
+```
+
+| Exception | Status |
+| --- | --- |
+| `AuthenticationError` | 401 |
+| `PermissionError` (meridian.PermissionError) | 403 |
+| `NotFoundError` | 404 |
+| `ConflictError` | 409 |
+| `RateLimitError` | 429 |
+| `APIError` | 5xx |
+
+## Configuration
+
+```python title="All options"
+client = Meridian(
+    api_key="mrnd_test_…",                  # or omit to read MERIDIAN_API_KEY
+    base_url="https://api.meridian.dev/v2",
+    timeout=30.0,
+    max_retries=3,
+    default_headers={"X-Team": "payments"},
+    http_client=httpx.Client(proxy="…"),    # bring your own httpx client
+)
+```
+
+<Callout type="tip">
+  The SDK reads `MERIDIAN_API_KEY` automatically when `api_key` is omitted - `Meridian()` with no arguments works if the env var is set.
+</Callout>

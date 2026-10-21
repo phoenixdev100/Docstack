@@ -1,0 +1,115 @@
+---
+title: Ruby SDK
+description: "meridian - the official Ruby gem: installation, keyword-argument API, enumerable pagination, and webhook verification."
+updatedAt: 2026-08-22
+---
+
+The official Ruby client for Ruby 3.0+. Idiomatic keyword-argument API, `Enumerable` pagination, retries, and a `Meridian::Webhook` verifier.
+
+## Installation
+
+<CodeTabs>
+
+```bash title="gem"
+gem install meridian
+```
+
+```ruby title="Gemfile"
+gem "meridian", "~> 1.0"
+```
+
+</CodeTabs>
+
+## Initialization
+
+```ruby title="client.rb"
+require "meridian"
+
+client = Meridian::Client.new(ENV["MERIDIAN_API_KEY"])
+```
+
+With options:
+
+```ruby title="options.rb"
+client = Meridian::Client.new(
+  ENV["MERIDIAN_API_KEY"],
+  timeout: 30,          # seconds
+  max_retries: 3,
+)
+```
+
+## Methods
+
+```ruby title="projects.rb"
+project = client.projects.create(name: "billing-sync", region: "us-east")
+
+fetched = client.projects.get(project.id)
+
+updated = client.projects.update(project.id, name: "billing-sync-v2")
+```
+
+| Method | Endpoint |
+| --- | --- |
+| `projects.create(**params)` | `POST /projects` |
+| `projects.get(id)` | `GET /projects/:id` |
+| `projects.update(id, **params)` | `PATCH /projects/:id` |
+| `projects.delete(id)` | `DELETE /projects/:id` |
+| `projects.list(**params)` | `GET /projects` - `Enumerable` |
+| `webhooks.create / list / deliveries / replay` | `/webhooks*` |
+| `events.list / get` | `/events*` |
+
+## Pagination
+
+`list` returns an `Enumerable` that fetches pages lazily:
+
+```ruby title="iterate.rb"
+client.projects.list(status: "active").each do |project|
+  puts "#{project.id} #{project.name}"
+end
+
+# Enumerable methods work across pages
+names = client.projects.list.map(&:name)
+```
+
+## Webhook verification
+
+```ruby title="webhook.rb"
+require "meridian/webhook"
+
+post "/webhooks/meridian" do
+  event = Meridian::Webhook.verify(
+    request.body.read,                      # raw body - do NOT parse first
+    request.env["HTTP_MERIDIAN_SIGNATURE"],
+    ENV["WEBHOOK_SECRET"]
+  )
+  status 200
+rescue Meridian::SignatureVerificationError
+  status 400
+end
+```
+
+## Errors
+
+```ruby title="errors.rb"
+begin
+  client.projects.create(name: "x", region: "us-east")
+rescue Meridian::RateLimitError => e
+  sleep e.retry_after
+  retry
+rescue Meridian::Error => e
+  warn "#{e.code}: #{e.message} (req #{e.request_id})"
+end
+```
+
+| Exception | Status |
+| --- | --- |
+| `AuthenticationError` | 401 |
+| `PermissionError` | 403 |
+| `NotFoundError` | 404 |
+| `ConflictError` | 409 |
+| `RateLimitError` | 429 |
+| `APIError` | 5xx |
+
+<Callout type="tip">
+  The gem is thread-safe - share one `Client` across threads/fibers; connection pooling is handled internally.
+</Callout>

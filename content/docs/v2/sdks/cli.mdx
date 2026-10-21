@@ -1,0 +1,99 @@
+---
+title: CLI
+description: The meridian command-line tool - auth, resource management, event tailing, and webhook tunneling from the terminal.
+updatedAt: 2026-09-11
+---
+
+The `meridian` CLI covers the interactive side of the platform: managing resources, tailing events, simulating traffic, and tunneling webhooks to localhost. It's the fastest path for exploration and local development.
+
+## Install
+
+<CodeTabs>
+
+```bash title="npm"
+npm install -g @meridian/cli
+meridian --version   # 1.4.2
+```
+
+```bash title="Homebrew"
+brew install meridian/tap/meridian
+```
+
+```bash title="Shell"
+curl -sL https://get.meridian.dev | sh
+```
+
+</CodeTabs>
+
+## Authenticate
+
+```bash title="Login (browser) or paste a key"
+meridian login              # opens the dashboard to mint a key
+meridian login --key mrnd_test_…   # headless / CI
+```
+
+Credentials store in `~/.meridian/config.json`. Profiles separate environments:
+
+```bash title="Named profiles"
+meridian login --profile prod --key mrnd_live_…
+meridian --profile prod projects list
+```
+
+## Command map
+
+| Command | What it does |
+| --- | --- |
+| `meridian projects list` | List projects |
+| `meridian projects create` | Create a project (`--file` for JSON) |
+| `meridian events list --project <id>` | Event history |
+| `meridian events tail --project <id>` | **Live event feed** |
+| `meridian webhooks list` | Registered endpoints |
+| `meridian webhooks create --url <u> --events <list>` | Register an endpoint |
+| `meridian listen --forward <url>` | **Tunnel + tail deliveries** |
+| `meridian simulate event --type <t>` | Fire a test event |
+| `meridian keys list` | API keys for the workspace |
+| `meridian api <method> <path>` | Raw API escape hatch (`meridian api GET /v2/projects`) |
+
+## The local dev loop
+
+```bash title="Three commands for webhook development"
+meridian listen --forward localhost:3000/webhooks/meridian   # tunnel + log
+meridian simulate event --type project.updated               # fire events
+meridian events tail --project prj_9kLm2xVb7nQe              # watch the feed
+```
+
+`meridian listen` prints every delivery - payload, headers, your handler's response - the local delivery log.
+
+## Scripting
+
+Every command takes `--json` for parseable output:
+
+```bash title="JSON for piping"
+meridian projects list --json | jq '.[].id'
+meridian api GET /v2/events --json | jq '.data[] | .type'
+```
+
+Exit codes: `0` success, `1` API error, `2` auth failure - composable in CI.
+
+## Configuration
+
+```bash title="~/.meridian/config.json"
+{
+  "default_profile": "dev",
+  "profiles": {
+    "dev":  { "key": "mrnd_test_…", "region": "us-east" },
+    "prod": { "key": "mrnd_live_…", "region": "eu-west" }
+  }
+}
+```
+
+Flags override profile → env var (`MERIDIAN_API_KEY`) → config precedence.
+
+## When CLI vs SDK
+
+- **CLI**: exploration, ops tasks, local dev, one-off scripts - human-driven.
+- **SDK**: application code, automation, anything that runs unattended in production.
+
+<Callout type="tip">
+  `meridian api` is the undocumented endpoint escape hatch - if a brand-new API ships before CLI commands catch up, `meridian api GET /v2/<path>` works immediately.
+</Callout>

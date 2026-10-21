@@ -1,0 +1,121 @@
+---
+title: Go SDK
+description: "meridian-go - the official Go client: installation, context-aware methods, iterators, option structs, and webhook verification."
+updatedAt: 2026-08-26
+---
+
+The official Go client for Go 1.21+. Context-first API design, iterator-based pagination, typed params via option structs, and a `webhook` subpackage for signature verification.
+
+## Installation
+
+```bash title="Terminal"
+go get github.com/meridian/meridian-go/v2
+```
+
+## Initialization
+
+```go title="main.go"
+package main
+
+import (
+    "os"
+
+    "github.com/meridian/meridian-go/v2"
+)
+
+func main() {
+    client := meridian.NewClient(os.Getenv("MERIDIAN_API_KEY"))
+    _ = client
+}
+```
+
+With options:
+
+```go title="options.go"
+client := meridian.NewClient(
+    os.Getenv("MERIDIAN_API_KEY"),
+    meridian.WithTimeout(30*time.Second),
+    meridian.WithMaxRetries(3),
+    meridian.WithHTTPClient(customHTTPClient),
+)
+```
+
+## Methods
+
+Every method takes `context.Context` first and returns typed results:
+
+```go title="projects.go" {4}
+project, err := client.Projects.Create(ctx, &meridian.ProjectCreateParams{
+    Name:   "billing-sync",
+    Region: "us-east",
+})
+if err != nil {
+    var merr *meridian.Error
+    if errors.As(err, &merr) {
+        log.Printf("failed: %s %s (req %s)", merr.Code, merr.Message, merr.RequestID)
+    }
+    return err
+}
+```
+
+| Method | Endpoint |
+| --- | --- |
+| `Projects.Create(ctx, params)` | `POST /projects` |
+| `Projects.Get(ctx, id)` | `GET /projects/:id` |
+| `Projects.Update(ctx, id, params)` | `PATCH /projects/:id` |
+| `Projects.Delete(ctx, id)` | `DELETE /projects/:id` |
+| `Projects.List(ctx, params)` | `GET /projects` (iterator) |
+| `Webhooks.Create / List / Deliveries / Replay` | `/webhooks*` |
+| `Events.List / Get` | `/events*` |
+
+## Pagination
+
+`List` returns an iterator - no manual cursor handling:
+
+```go title="iterate.go"
+it := client.Projects.List(ctx, &meridian.ProjectListParams{
+    Status: meridian.String("active"),
+})
+for it.Next() {
+    p := it.Current()
+    fmt.Println(p.ID, p.Name)
+}
+if err := it.Err(); err != nil {
+    return err
+}
+```
+
+## Webhook verification
+
+```go title="webhook.go"
+import "github.com/meridian/meridian-go/v2/webhook"
+
+event, err := webhook.Verify(
+    rawBody,                        // []byte - do NOT unmarshal first
+    r.Header.Get("Meridian-Signature"),
+    os.Getenv("WEBHOOK_SECRET"),
+    webhook.DefaultTolerance,       // 5 minutes
+)
+if err != nil {
+    http.Error(w, "invalid signature", http.StatusBadRequest)
+    return
+}
+```
+
+## Errors
+
+Errors implement `*meridian.Error` - inspect with `errors.As`:
+
+```go title="errors.go"
+var merr *meridian.Error
+if errors.As(err, &merr) {
+    merr.Status     // 429
+    merr.Code       // "rate_limited"
+    merr.RetryAfter // seconds, when Retry-After was sent
+    merr.RequestID  // req_…
+}
+```
+
+<Callout type="tip">
+  The client retries `429`/`5xx` automatically (3 attempts, exponential backoff + jitter). Disable with `WithMaxRetries(0)`.
+</Callout>
